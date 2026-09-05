@@ -1,0 +1,369 @@
+@import "tailwindcss";
+
+/* =====================================================================
+   ZYNEX STUDIO — Design tokens
+   Dark Premium by default; every colour is a variable so a light theme
+   can be introduced later by swapping the :root / [data-theme] block.
+   ===================================================================== */
+
+@theme {
+  --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink-950: #05060c;
+  --color-ink-900: #080a14;
+  --color-ink-850: #0b0e1b;
+  --color-ink-800: #101426;
+  --color-ink-700: #171c33;
+  --color-ink-600: #232945;
+
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #d9e6ff;
+  --color-brand-200: #bcd3ff;
+  --color-brand-300: #8eb5ff;
+  --color-brand-400: #598eff;
+  --color-brand-500: #3366ff;
+  --color-brand-600: #1f45f5;
+  --color-brand-700: #1a34e1;
+  --color-brand-800: #1c2db6;
+  --color-brand-900: #1c2d8f;
+
+  --color-accent-300: #a5f3fc;
+  --color-accent-400: #4fd8ee;
+  --color-accent-500: #16bfd8;
+  --color-violet-glow: #7c5cff;
+
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.5rem;
+}
+
+:root {
+  color-scheme: dark;
+
+  --surface-base: #05060c;
+  --surface-raised: rgba(255, 255, 255, 0.045);
+  --surface-solid: rgba(13, 16, 30, 0.86);
+  --surface-strong: rgba(9, 11, 22, 0.94);
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: #f4f6fb;
+  --text-secondary: #a8b1c9;
+  --text-muted: #6f7897;
+  --glow-brand: rgba(51, 102, 255, 0.5);
+  --glow-violet: rgba(124, 92, 255, 0.38);
+  --glow-cyan: rgba(79, 216, 238, 0.3);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-base: #f6f8fd;
+  --surface-raised: rgba(255, 255, 255, 0.72);
+  --surface-solid: rgba(255, 255, 255, 0.92);
+  --surface-strong: rgba(255, 255, 255, 0.97);
+  --border-subtle: rgba(12, 20, 45, 0.09);
+  --border-strong: rgba(12, 20, 45, 0.16);
+  --text-primary: #0b1020;
+  --text-secondary: #47506b;
+  --text-muted: #6f7897;
+  --glow-brand: rgba(51, 102, 255, 0.18);
+  --glow-violet: rgba(124, 92, 255, 0.14);
+  --glow-cyan: rgba(22, 191, 216, 0.12);
+}
+
+* {
+  border-color: var(--border-subtle);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+
+/* Ambient background: layered radial gradients + fine grid.
+   Fixed & pointer-events-none so it never affects layout or scrolling. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 600px at 12% -8%, var(--glow-brand), transparent 60%),
+    radial-gradient(760px 520px at 88% 4%, var(--glow-violet), transparent 62%),
+    radial-gradient(620px 620px at 50% 108%, var(--glow-cyan), transparent 62%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(circle at 50% 0%, black, transparent 78%);
+}
+
+[data-theme="light"] body::after {
+  background-image:
+    linear-gradient(to right, rgba(11, 16, 32, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 16, 32, 0.04) 1px, transparent 1px);
+}
+
+/* ------------------------- Utilities ------------------------------ */
+
+@utility glass {
+  background: var(--surface-raised);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 18px 40px -22px rgba(2, 4, 12, 0.9);
+}
+
+/* Higher-contrast surface for forms, tables and dashboards. */
+@utility glass-solid {
+  background: var(--surface-solid);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 60px -30px rgba(2, 4, 12, 0.95);
+}
+
+@utility glass-strong {
+  background: var(--surface-strong);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid var(--border-strong);
+}
+
+@utility text-gradient {
+  background: linear-gradient(105deg, #a9c6ff 0%, #7ea8ff 32%, #6ee7ff 68%, #a5f3fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+[data-theme="light"] .text-gradient {
+  background: linear-gradient(120deg, #101a3a 0%, #1f45f5 55%, #16bfd8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@utility glow-ring {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 40px -12px rgba(51, 102, 255, 0.55);
+}
+
+@utility container-page {
+  width: 100%;
+  margin-inline: auto;
+  max-width: 80rem;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-page {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-page {
+    padding-inline: 2rem;
+  }
+}
+
+/* ------------------------- Interactions --------------------------- */
+
+.hover-lift {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+  will-change: transform;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  border-color: rgba(120, 160, 255, 0.32);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.07) inset,
+    0 28px 60px -28px rgba(31, 69, 245, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
+/* Focus states: always visible, never ugly. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* ------------------------- Animations ----------------------------- */
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(0.6deg);
+  }
+}
+
+@keyframes float-slower {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(-0.8deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+}
+.animate-float-slower {
+  animation: float-slower 9s ease-in-out infinite;
+}
+.animate-pulse-glow {
+  animation: pulse-glow 5s ease-in-out infinite;
+}
+.animate-fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-marquee {
+  animation: marquee 32s linear infinite;
+}
+
+/* Skeleton shimmer */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+/* ------------------------- Scrollbar ------------------------------ */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: content-box;
+}
+
+/* Hide number input spinners in admin forms */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Native date/time picker icon visible on dark surfaces */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
+/* Selection */
+::selection {
+  background: rgba(51, 102, 255, 0.35);
+  color: #fff;
+}
