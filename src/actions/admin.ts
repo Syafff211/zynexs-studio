@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createAdminClient, requireAdmin } from "@/lib/supabase/server";
 import {
   productSchema,
@@ -14,7 +14,7 @@ import {
   siteSettingsSchema,
   firstError,
 } from "@/lib/validations";
-import { DEFAULT_SITE_SETTINGS } from "@/lib/constants";
+import { CACHE_TAGS, DEFAULT_SITE_SETTINGS } from "@/lib/constants";
 import type { ActionState } from "@/actions/auth";
 
 /* ------------------------------------------------------------------ */
@@ -66,6 +66,7 @@ function revalidateStorefront() {
   revalidatePath("/store");
   revalidatePath("/promo");
   revalidatePath("/faq");
+  updateTag(CACHE_TAGS.faqs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -137,6 +138,10 @@ export async function saveProductAction(
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: input.id ? "Produk diperbarui." : "Produk berhasil dibuat." };
 }
 
@@ -153,6 +158,10 @@ export async function toggleProductActiveAction(
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: isActive ? "Produk diaktifkan." : "Produk dinonaktifkan." };
 }
 
@@ -172,6 +181,10 @@ export async function toggleProductFeaturedAction(
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: isFeatured ? "Produk jadi unggulan." : "Produk tidak lagi unggulan." };
 }
 
@@ -185,6 +198,10 @@ export async function deleteProductAction(productId: string): Promise<ActionStat
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: "Produk dihapus." };
 }
 
@@ -233,6 +250,10 @@ export async function saveCategoryAction(
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: input.id ? "Kategori diperbarui." : "Kategori dibuat." };
 }
 
@@ -246,6 +267,10 @@ export async function deleteCategoryAction(categoryId: string): Promise<ActionSt
 
   revalidateStorefront();
   revalidatePath("/admin/products");
+  updateTag(CACHE_TAGS.products);
+  updateTag(CACHE_TAGS.categories);
+  revalidatePath("/store");
+  revalidatePath("/", "layout");
   return { ok: true, message: "Kategori dihapus." };
 }
 
@@ -305,6 +330,7 @@ export async function savePromoAction(
   }
 
   revalidatePath("/admin/promo");
+  updateTag(CACHE_TAGS.promos);
   revalidatePath("/promo");
   return { ok: true, message: input.id ? "Promo diperbarui." : "Promo berhasil dibuat." };
 }
@@ -321,6 +347,7 @@ export async function togglePromoActiveAction(
   if (error) return { ok: false, message: "Gagal mengubah status promo." };
 
   revalidatePath("/admin/promo");
+  updateTag(CACHE_TAGS.promos);
   revalidatePath("/promo");
   return { ok: true, message: isActive ? "Promo diaktifkan." : "Promo dinonaktifkan." };
 }
@@ -334,6 +361,7 @@ export async function deletePromoAction(promoId: string): Promise<ActionState> {
   if (error) return { ok: false, message: "Gagal menghapus promo." };
 
   revalidatePath("/admin/promo");
+  updateTag(CACHE_TAGS.promos);
   revalidatePath("/promo");
   return { ok: true, message: "Promo dihapus." };
 }
@@ -491,7 +519,9 @@ export async function saveFaqAction(
   if (error) return { ok: false, message: "Gagal menyimpan FAQ." };
 
   revalidatePath("/faq");
+  updateTag(CACHE_TAGS.faqs);
   revalidatePath("/admin/content");
+  updateTag(CACHE_TAGS.announcements);
   return { ok: true, message: input.id ? "FAQ diperbarui." : "FAQ dibuat." };
 }
 
@@ -504,7 +534,9 @@ export async function deleteFaqAction(faqId: string): Promise<ActionState> {
   if (error) return { ok: false, message: "Gagal menghapus FAQ." };
 
   revalidatePath("/faq");
+  updateTag(CACHE_TAGS.faqs);
   revalidatePath("/admin/content");
+  updateTag(CACHE_TAGS.announcements);
   return { ok: true, message: "FAQ dihapus." };
 }
 
@@ -550,6 +582,7 @@ export async function saveAnnouncementAction(
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/content");
+  updateTag(CACHE_TAGS.announcements);
   return { ok: true, message: input.id ? "Pengumuman diperbarui." : "Pengumuman dibuat." };
 }
 
@@ -563,6 +596,7 @@ export async function deleteAnnouncementAction(id: string): Promise<ActionState>
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/content");
+  updateTag(CACHE_TAGS.announcements);
   return { ok: true, message: "Pengumuman dihapus." };
 }
 
@@ -659,5 +693,6 @@ export async function saveSiteSettingsAction(
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/settings");
+  updateTag(CACHE_TAGS.settings);
   return { ok: true, message: "Pengaturan landing page tersimpan." };
 }
