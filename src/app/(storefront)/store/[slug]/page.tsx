@@ -8,17 +8,23 @@ import { ProductCard } from "@/components/store/product-card";
 import { Accordion } from "@/components/ui/accordion";
 import { GlassCard, Badge, SectionHeading } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { getProductBySlug, getRelatedProducts, getProducts } from "@/services/catalog";
+import { getProductBySlug, getRelatedProducts } from "@/services/catalog";
 import { formatIDR } from "@/lib/utils";
 import { env } from "@/lib/env";
 import { BRAND } from "@/lib/constants";
 
-export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const products = await getProducts();
-  return products.slice(0, 50).map((product) => ({ slug: product.slug }));
-}
+/**
+ * Rendered per request rather than prerendered.
+ *
+ * The storefront layout reads the session cookie to render the account menu,
+ * and `cookies()` is incompatible with static/ISR generation — with
+ * `generateStaticParams` here, on-demand ISR of an unknown slug threw
+ * DYNAMIC_SERVER_USAGE and returned a 500 instead of a 404.
+ *
+ * Rendering dynamically costs almost nothing: every catalog read below goes
+ * through `unstable_cache`, so the database is hit at most once per TTL and
+ * is invalidated immediately when an admin edits a product.
+ */
 
 export async function generateMetadata({
   params,
