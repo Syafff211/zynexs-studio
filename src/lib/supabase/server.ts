@@ -31,6 +31,28 @@ export async function createClient() {
 }
 
 /**
+ * Anonymous, cookie-less client for PUBLIC data (catalog, CMS content).
+ *
+ * Why this exists: `createClient()` reads request cookies, and `cookies()`
+ * throws in build-time contexts such as `generateStaticParams`, `sitemap.ts`
+ * and static prerendering. Public catalog rows are identical for every
+ * visitor, so there is nothing to personalise — reading them without a
+ * session is both correct and cacheable.
+ *
+ * It still runs as the `anon` role, so RLS applies exactly as it would for a
+ * signed-out visitor: only `is_active` rows are visible.
+ */
+let publicClient: ReturnType<typeof createSupabaseClient> | null = null;
+
+export function createPublicClient() {
+  publicClient ??= createSupabaseClient(env.supabaseUrl, env.supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { "X-Client-Info": "zynex-studio-public" } },
+  });
+  return publicClient;
+}
+
+/**
  * Service-role client. Bypasses RLS, so it is used ONLY for trusted
  * server-side mutations (checkout pricing, promo redemption, admin writes).
  * Never import this module from a "use client" file.
