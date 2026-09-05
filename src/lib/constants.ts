@@ -131,3 +131,17 @@ export const HOW_TO_ORDER_STEPS = [
     description: "Kirim detail order ke admin, selesaikan pembayaran, pesanan diproses.",
   },
 ] as const;
+
+/**
+ * Cache tags for `unstable_cache`d catalog/CMS reads. Admin mutations call
+ * `revalidateTag(...)` with these so edits appear immediately instead of
+ * waiting for the TTL to lapse.
+ */
+export const CACHE_TAGS = {
+  products: "catalog:products",
+  categories: "catalog:categories",
+  settings: "cms:settings",
+  faqs: "cms:faqs",
+  announcements: "cms:announcements",
+  promos: "catalog:promos",
+} as const;
