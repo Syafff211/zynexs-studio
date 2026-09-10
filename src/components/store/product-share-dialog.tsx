@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Image from "next/image";
 import {
   Copy,
@@ -9,6 +10,7 @@ import {
   Share2,
 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatIDR } from "@/lib/utils";
@@ -217,5 +219,41 @@ export function ProductShareDialog({ product, open, onClose }: ProductShareDialo
         Tautan mengarah langsung ke halaman detail produk, lengkap dengan harga dan informasinya.
       </p>
     </Modal>
+  );
+}
+
+/**
+ * Self-contained trigger for product detail pages. The catalogue grid keeps a
+ * single shared dialog in StoreBrowser, while an individual slug page only
+ * needs this button and its local open state.
+ */
+export function ProductShareButton({
+  product,
+  className,
+}: {
+  product: ProductWithCategory;
+  className?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const close = React.useCallback(() => setOpen(false), []);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Bagikan produk ${product.name}`}
+        className={cn("shrink-0", className)}
+      >
+        <Share2 className="h-4 w-4" aria-hidden="true" />
+        Bagikan produk
+      </Button>
+
+      {open && <ProductShareDialog product={product} open onClose={close} />}
+    </>
   );
 }
