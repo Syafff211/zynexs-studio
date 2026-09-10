@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Zap, Check, Clock } from "lucide-react";
+import { ShoppingCart, Zap, Check, Clock, Share2 } from "lucide-react";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,12 @@ export function ProductCard({
   product,
   priority = false,
   compact = false,
+  onShare,
 }: {
   product: ProductWithCategory;
   priority?: boolean;
   compact?: boolean;
+  onShare?: (product: ProductWithCategory) => void;
 }) {
   const { add, has } = useCart();
   const { success, info } = useToast();
@@ -92,6 +94,18 @@ export function ProductCard({
         </div>
 
         <div className="flex flex-col items-end gap-1.5">
+          {onShare && (
+            <button
+              type="button"
+              onClick={() => onShare(product)}
+              aria-label={`Bagikan produk ${product.name}`}
+              title="Bagikan produk"
+              className="relative z-10 inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.055] px-2.5 text-[11.5px] font-semibold text-white/55 transition-all duration-200 hover:border-brand-400/30 hover:bg-brand-500/10 hover:text-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 active:scale-[0.97]"
+            >
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Bagikan
+            </button>
+          )}
           {product.badge && <Badge tone="violet">{product.badge}</Badge>}
           {discountPercent > 0 && <Badge tone="danger">-{discountPercent}%</Badge>}
         </div>
