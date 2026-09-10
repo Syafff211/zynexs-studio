@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search, SlidersHorizontal, X, Sparkles } from "lucide-react";
 import { ProductCard } from "./product-card";
+import { ProductShareDialog } from "./product-share-dialog";
 import { EmptyState } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,9 @@ export function StoreBrowser({
   const [sort, setSort] = React.useState<SortKey>("featured");
   const [featuredOnly, setFeaturedOnly] = React.useState(false);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [shareProduct, setShareProduct] = React.useState<ProductWithCategory | null>(null);
+
+  const closeShareDialog = React.useCallback(() => setShareProduct(null), []);
 
   // Keep the URL shareable without triggering a server round-trip.
   React.useEffect(() => {
@@ -219,7 +223,12 @@ export function StoreBrowser({
       {filtered.length ? (
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((product, index) => (
-            <ProductCard key={product.id} product={product} priority={index < 4} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              priority={index < 4}
+              onShare={setShareProduct}
+            />
           ))}
         </div>
       ) : (
@@ -239,6 +248,14 @@ export function StoreBrowser({
               </Button>
             ) : undefined
           }
+        />
+      )}
+
+      {shareProduct && (
+        <ProductShareDialog
+          product={shareProduct}
+          open
+          onClose={closeShareDialog}
         />
       )}
     </div>
