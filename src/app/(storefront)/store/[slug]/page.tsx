@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ChevronRight, Check, FileText, Sparkles, ShieldCheck, Clock } from "lucide-react";
 import { ProductPurchasePanel } from "@/components/store/product-purchase-panel";
+import { ProductShareButton } from "@/components/store/product-share-dialog";
 import { ProductCard } from "@/components/store/product-card";
 import { Accordion } from "@/components/ui/accordion";
 import { GlassCard, Badge, SectionHeading } from "@/components/ui/card";
@@ -195,15 +196,18 @@ export default async function ProductDetailPage({
 
             {/* Title block */}
             <header className="mt-7">
-              <div className="flex flex-wrap items-center gap-2">
-                {product.category && <Badge tone="brand">{product.category.name}</Badge>}
-                {product.duration && (
-                  <Badge tone="neutral">
-                    <Clock className="h-3 w-3" aria-hidden="true" />
-                    {product.duration}
-                  </Badge>
-                )}
-                {product.is_featured && <Badge tone="warning">Unggulan</Badge>}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {product.category && <Badge tone="brand">{product.category.name}</Badge>}
+                  {product.duration && (
+                    <Badge tone="neutral">
+                      <Clock className="h-3 w-3" aria-hidden="true" />
+                      {product.duration}
+                    </Badge>
+                  )}
+                  {product.is_featured && <Badge tone="warning">Unggulan</Badge>}
+                </div>
+                <ProductShareButton product={product} />
               </div>
 
               <h1 className="mt-3.5 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
