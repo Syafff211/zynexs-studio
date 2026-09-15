@@ -25,7 +25,7 @@ export function ProductCard({
   onShare?: (product: ProductWithCategory) => void;
 }) {
   const { add, has } = useCart();
-  const { success, info } = useToast();
+  const { success } = useToast();
   const router = useRouter();
   const [justAdded, setJustAdded] = React.useState(false);
   const inCart = has(product.id);
@@ -42,11 +42,6 @@ export function ProductCard({
   };
 
   const handleAdd = () => {
-    if (product.is_custom_price) {
-      info("Produk custom", "Harga produk ini dikelola admin. Hubungi kami via WhatsApp.");
-      router.push(`/store/${product.slug}`);
-      return;
-    }
     add(line);
     setJustAdded(true);
     success("Ditambahkan ke keranjang", `${product.name} siap di-checkout.`);
@@ -93,21 +88,20 @@ export function ProductCard({
           )}
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="relative z-10 flex max-w-[70%] flex-wrap items-center justify-end gap-1.5">
+          {product.badge && <Badge tone="violet">{product.badge}</Badge>}
+          {discountPercent > 0 && <Badge tone="danger">-{discountPercent}%</Badge>}
           {onShare && (
             <button
               type="button"
               onClick={() => onShare(product)}
               aria-label={`Bagikan produk ${product.name}`}
               title="Bagikan produk"
-              className="relative z-10 inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.055] px-2.5 text-[11.5px] font-semibold text-white/55 transition-all duration-200 hover:border-brand-400/30 hover:bg-brand-500/10 hover:text-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 active:scale-[0.97]"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] text-white/45 transition-all duration-200 hover:border-brand-400/30 hover:bg-brand-500/10 hover:text-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 active:scale-[0.96]"
             >
               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Bagikan
             </button>
           )}
-          {product.badge && <Badge tone="violet">{product.badge}</Badge>}
-          {discountPercent > 0 && <Badge tone="danger">-{discountPercent}%</Badge>}
         </div>
       </div>
 
@@ -159,28 +153,42 @@ export function ProductCard({
       </div>
 
       <div className="relative z-10 mt-4 grid grid-cols-2 gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleAdd}
-          aria-label={`Tambah ${product.name} ke keranjang`}
-        >
-          {justAdded || inCart ? (
-            <>
-              <Check className="h-4 w-4" aria-hidden="true" />
-              {justAdded ? "Ditambah" : "Di keranjang"}
-            </>
-          ) : (
-            <>
-              <ShoppingCart className="h-4 w-4" aria-hidden="true" />
-              Keranjang
-            </>
-          )}
-        </Button>
-        <Button size="sm" onClick={handleBuyNow} aria-label={`Beli ${product.name} sekarang`}>
-          <Zap className="h-4 w-4" aria-hidden="true" />
-          Beli Now
-        </Button>
+        {product.is_custom_price ? (
+          <Button
+            size="sm"
+            onClick={handleBuyNow}
+            aria-label={`Lihat detail dan konsultasikan ${product.name}`}
+            className="col-span-2"
+          >
+            <Zap className="h-4 w-4" aria-hidden="true" />
+            Lihat &amp; Konsultasi
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleAdd}
+              aria-label={`Tambah ${product.name} ke keranjang`}
+            >
+              {justAdded || inCart ? (
+                <>
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  {justAdded ? "Ditambah" : "Di keranjang"}
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+                  Keranjang
+                </>
+              )}
+            </Button>
+            <Button size="sm" onClick={handleBuyNow} aria-label={`Beli ${product.name} sekarang`}>
+              <Zap className="h-4 w-4" aria-hidden="true" />
+              Beli
+            </Button>
+          </>
+        )}
       </div>
     </article>
   );
