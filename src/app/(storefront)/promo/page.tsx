@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Tag, Clock, Users, Sparkles, ArrowRight, Infinity as InfinityIcon } from "lucide-react";
+import {
+  Tag,
+  Clock,
+  Users,
+  Sparkles,
+  ArrowRight,
+  Infinity as InfinityIcon,
+  PackageCheck,
+} from "lucide-react";
 import { GlassCard, Badge, EmptyState, SectionHeading } from "@/components/ui/card";
 import { buttonStyles } from "@/components/ui/button";
 import { CopyCodeButton } from "@/components/store/copy-code-button";
@@ -25,7 +33,9 @@ export default async function PromoPage() {
   const [promos, settings] = await Promise.all([getPublicPromos(), getSiteSettings()]);
 
   const available = promos.filter(
-    (promo) => promo.max_redemptions === null || promo.redemption_count < promo.max_redemptions
+    (promo) =>
+      (promo.max_redemptions === null || promo.redemption_count < promo.max_redemptions) &&
+      (promo.applies_to_all || promo.applicable_products.length > 0)
   );
 
   return (
@@ -85,14 +95,45 @@ export default async function PromoPage() {
                     </p>
                   )}
 
-                  <div className="relative mt-4">
+                  <div className="relative mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/35">
+                      <PackageCheck className="h-3.5 w-3.5 text-violet-300" aria-hidden="true" />
+                      Berlaku untuk
+                    </p>
+                    {promo.applies_to_all ? (
+                      <p className="mt-1.5 text-[12.5px] font-medium text-white/70">
+                        Semua produk di katalog
+                      </p>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {promo.applicable_products.slice(0, 3).map((product) => (
+                          <Link
+                            key={product.id}
+                            href={`/store/${product.slug}`}
+                            className="relative z-10 max-w-full truncate rounded-lg border border-violet-400/15 bg-violet-500/[0.08] px-2 py-1 text-[11px] font-medium text-violet-200 transition-colors hover:border-violet-400/30 hover:bg-violet-500/[0.14]"
+                          >
+                            {product.name}
+                          </Link>
+                        ))}
+                        {promo.applicable_products.length > 3 && (
+                          <span className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-white/45">
+                            +{promo.applicable_products.length - 3} produk
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative mt-3">
                     <CopyCodeButton code={promo.code} />
                   </div>
 
                   <dl className="relative mt-4 space-y-2 border-t border-white/[0.08] pt-4 text-[12.5px]">
                     {promo.min_purchase > 0 && (
                       <div className="flex items-center justify-between">
-                        <dt className="text-white/40">Min. belanja</dt>
+                        <dt className="text-white/40">
+                          {promo.applies_to_all ? "Min. belanja" : "Min. produk promo"}
+                        </dt>
                         <dd className="font-medium text-white/70">
                           {formatIDR(promo.min_purchase)}
                         </dd>
@@ -170,6 +211,7 @@ export default async function PromoPage() {
               "Satu akun hanya dapat menggunakan kode promo yang sama sebanyak satu kali.",
               "Jika kuota promo sudah habis, kode otomatis tidak dapat digunakan lagi.",
               "Kode promo yang sudah kedaluwarsa atau dinonaktifkan admin tidak dapat digunakan.",
+              "Promo tertentu hanya berlaku untuk produk yang tercantum; diskon dan minimum belanja dihitung dari produk yang memenuhi syarat.",
               "Validasi promo dilakukan sepenuhnya di server saat checkout untuk memastikan keadilan.",
               "Kode promo tidak dapat digabungkan dengan kode promo lain dalam satu pesanan.",
             ].map((rule, index) => (
