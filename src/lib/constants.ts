@@ -43,7 +43,8 @@ export const PROMO_MESSAGES: Record<PromoStatus, string> = {
   limit_reached: "Kode promo sudah mencapai batas penggunaan.",
   expired: "Kode promo sudah expired.",
   inactive: "Kode promo tidak aktif.",
-  min_purchase: "Total belanja belum memenuhi minimum penggunaan promo.",
+  min_purchase: "Subtotal produk yang memenuhi syarat belum mencapai minimum promo.",
+  not_applicable: "Kode promo tidak berlaku untuk produk di keranjang.",
 };
 
 export const CART_STORAGE_KEY = "zynex.cart.v1";
