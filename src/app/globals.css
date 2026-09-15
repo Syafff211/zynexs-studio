@@ -327,6 +327,15 @@ body::after {
 
 /* ------------------------- Scrollbar ------------------------------ */
 
+/* Horizontal filter rails remain swipeable without adding a noisy bar. */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
