@@ -145,11 +145,17 @@ export const promoSchema = z
     maxRedemptions: z.coerce.number().int().min(0).max(1_000_000).optional(),
     expiresAt: z.string().trim().optional().or(z.literal("")),
     isActive: z.boolean().default(true),
+    scope: z.enum(["all", "selected"]).default("all"),
+    productIds: z.array(z.string().uuid()).max(500, "Maksimal 500 produk per promo").default([]),
   })
   .refine(
     (data) => data.discountType !== "percentage" || data.discountValue <= 100,
     { message: "Diskon persentase maksimal 100%", path: ["discountValue"] }
-  );
+  )
+  .refine((data) => data.scope === "all" || data.productIds.length > 0, {
+    message: "Pilih minimal satu produk untuk promo ini",
+    path: ["productIds"],
+  });
 
 export type PromoInput = z.infer<typeof promoSchema>;
 
