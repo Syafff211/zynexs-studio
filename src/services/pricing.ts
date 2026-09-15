@@ -135,12 +135,18 @@ interface PromoRow {
   min_purchase: number | null;
 }
 
+interface PromoScopeRow {
+  applies_to_all: boolean;
+  promo_products: { product_id: string }[] | null;
+}
+
 /**
  * Validates a promo code against the database (read-only). Nothing here
  * mutates redemption counters — that happens atomically at checkout.
  */
 export async function resolvePromo(
   code: string | null | undefined,
+  lines: PricedLine[],
   subtotal: number,
   userId: string | null,
   email: string | null
@@ -182,8 +188,52 @@ export async function resolvePromo(
     };
   }
 
+  // Load the product scope only after the secret code has passed all generic
+  // checks. `applies_to_all` is explicit, so deleting the last linked product
+  // can never broaden a restricted promo into a global one.
+  const { data: scopeData, error: scopeError } = await admin
+    .from("promo_codes")
+    .select("applies_to_all, promo_products(product_id)")
+    .eq("id", row.promo_id)
+    .maybeSingle();
+
+  const scope = scopeData as PromoScopeRow | null;
+  if (scopeError || !scope) {
+    return {
+      status: "invalid",
+      message: PROMO_MESSAGES.invalid,
+      promoId: null,
+      code: trimmed.toUpperCase(),
+      discountType: null,
+      discountValue: null,
+      discount: 0,
+    };
+  }
+
+  const eligibleIds = new Set((scope.promo_products ?? []).map((item) => item.product_id));
+  const eligibleSubtotal = scope.applies_to_all
+    ? subtotal
+    : lines.reduce(
+        (sum, line) => sum + (eligibleIds.has(line.productId) ? line.subtotal : 0),
+        0
+      );
+
+  if (eligibleSubtotal <= 0) {
+    return {
+      status: "not_applicable",
+      message: PROMO_MESSAGES.not_applicable,
+      promoId: row.promo_id,
+      code: row.code,
+      discountType: row.discount_type,
+      discountValue: row.discount_value,
+      discount: 0,
+    };
+  }
+
+  // Minimum spend and discount are both scoped to eligible items. A customer
+  // cannot pad the cart with unrelated products to unlock a restricted promo.
   const minPurchase = row.min_purchase ?? 0;
-  if (subtotal < minPurchase) {
+  if (eligibleSubtotal < minPurchase) {
     return {
       status: "min_purchase",
       message: PROMO_MESSAGES.min_purchase,
@@ -196,7 +246,7 @@ export async function resolvePromo(
   }
 
   const discount = computeDiscount(
-    subtotal,
+    eligibleSubtotal,
     row.discount_type as DiscountType,
     row.discount_value ?? 0,
     row.max_discount
@@ -221,7 +271,7 @@ export async function quoteCart(
   email: string | null
 ): Promise<PricedCart> {
   const { lines, subtotal } = await priceCart(items);
-  const promo = await resolvePromo(promoCode, subtotal, userId, email);
+  const promo = await resolvePromo(promoCode, lines, subtotal, userId, email);
   const discount = promo?.status === "valid" ? promo.discount : 0;
 
   return {
