@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Search, SlidersHorizontal, X, Sparkles } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowUpDown, LayoutGrid, Search, Sparkles, X } from "lucide-react";
 import { ProductCard } from "./product-card";
 import { ProductShareDialog } from "./product-share-dialog";
 import { EmptyState } from "@/components/ui/card";
@@ -13,10 +13,10 @@ import type { Category, ProductWithCategory } from "@/types";
 type SortKey = "featured" | "price-asc" | "price-desc" | "newest" | "name";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: "featured", label: "Unggulan" },
-  { value: "price-asc", label: "Harga: Terendah" },
-  { value: "price-desc", label: "Harga: Tertinggi" },
-  { value: "newest", label: "Terbaru" },
+  { value: "featured", label: "Urutan unggulan" },
+  { value: "price-asc", label: "Harga termurah" },
+  { value: "price-desc", label: "Harga tertinggi" },
+  { value: "newest", label: "Produk terbaru" },
   { value: "name", label: "Nama A–Z" },
 ];
 
@@ -34,20 +34,25 @@ export function StoreBrowser({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const safeInitialCategory =
+    initialCategory === "all" || categories.some((item) => item.slug === initialCategory)
+      ? initialCategory
+      : "all";
 
-  const [query, setQuery] = React.useState(initialQuery);
-  const [category, setCategory] = React.useState(initialCategory);
+  const [query, setQuery] = React.useState(initialQuery.slice(0, 80));
+  const [category, setCategory] = React.useState(safeInitialCategory);
   const [sort, setSort] = React.useState<SortKey>("featured");
   const [featuredOnly, setFeaturedOnly] = React.useState(false);
-  const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [shareProduct, setShareProduct] = React.useState<ProductWithCategory | null>(null);
 
   const closeShareDialog = React.useCallback(() => setShareProduct(null), []);
 
-  // Keep the URL shareable without triggering a server round-trip.
+  // Keep search/category URLs shareable without a server round-trip. Sorting
+  // and "featured only" remain view preferences and do not pollute the URL.
   React.useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
-    if (query) params.set("q", query);
+    const cleanQuery = query.trim();
+    if (cleanQuery) params.set("q", cleanQuery);
     else params.delete("q");
     if (category && category !== "all") params.set("category", category);
     else params.delete("category");
@@ -61,17 +66,17 @@ export function StoreBrowser({
   }, [query, category]);
 
   const filtered = React.useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim().toLocaleLowerCase("id");
 
     const result = products.filter((product) => {
       if (featuredOnly && !product.is_featured) return false;
       if (category !== "all" && product.category?.slug !== category) return false;
       if (!needle) return true;
       return (
-        product.name.toLowerCase().includes(needle) ||
-        (product.short_description ?? "").toLowerCase().includes(needle) ||
-        (product.description ?? "").toLowerCase().includes(needle) ||
-        (product.category?.name ?? "").toLowerCase().includes(needle)
+        product.name.toLocaleLowerCase("id").includes(needle) ||
+        (product.short_description ?? "").toLocaleLowerCase("id").includes(needle) ||
+        (product.description ?? "").toLocaleLowerCase("id").includes(needle) ||
+        (product.category?.name ?? "").toLocaleLowerCase("id").includes(needle)
       );
     });
 
@@ -94,7 +99,9 @@ export function StoreBrowser({
     }
   }, [products, query, category, sort, featuredOnly]);
 
-  const hasFilters = Boolean(query) || category !== "all" || featuredOnly || sort !== "featured";
+  const hasFilters = Boolean(query.trim()) || category !== "all" || featuredOnly || sort !== "featured";
+  const categoryChips = [{ id: "all", name: "Semua Produk", slug: "all" }, ...categories];
+  const activeCategory = categoryChips.find((item) => item.slug === category)?.name ?? "Semua Produk";
 
   const reset = () => {
     setQuery("");
@@ -103,14 +110,14 @@ export function StoreBrowser({
     setFeaturedOnly(false);
   };
 
-  const categoryChips = [{ id: "all", name: "Semua", slug: "all" }, ...categories];
-
   return (
     <div>
-      {/* Toolbar */}
-      <div className="glass-solid sticky top-[4.25rem] z-30 rounded-2xl p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative flex-1">
+      <section
+        aria-label="Pencarian dan filter katalog"
+        className="glass-solid rounded-2xl p-3 sm:p-4 lg:sticky lg:top-[5.25rem] lg:z-30"
+      >
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <div className="relative min-w-0">
             <Search
               className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35"
               aria-hidden="true"
@@ -119,109 +126,113 @@ export function StoreBrowser({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Cari domain, AI Pro, Canva Pro…"
+              placeholder="Cari nama produk atau kategori…"
               aria-label="Cari produk"
-              className="h-11 w-full rounded-xl border border-white/10 bg-ink-900/60 pl-10 pr-9 text-[14.5px] text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+              maxLength={80}
+              className="h-11 w-full rounded-xl border border-white/10 bg-ink-950/45 pl-10 pr-10 text-[14px] text-white placeholder:text-white/30 focus:border-brand-400/40 focus:outline-none focus:ring-2 focus:ring-brand-500/45"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Bersihkan pencarian"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-white/40 hover:bg-white/10 hover:text-white"
+                className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-white/35 transition-colors hover:bg-white/[0.07] hover:text-white"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid min-w-0 grid-cols-[0.9fr_1.1fr] gap-2 md:flex md:items-center">
             <button
               type="button"
-              onClick={() => setFeaturedOnly((v) => !v)}
+              onClick={() => setFeaturedOnly((value) => !value)}
               aria-pressed={featuredOnly}
               className={cn(
-                "inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border px-3.5 text-[13.5px] font-medium transition-colors",
+                "inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 text-[12.5px] font-semibold transition-colors sm:text-[13px]",
                 featuredOnly
-                  ? "border-brand-400/45 bg-brand-500/15 text-brand-100"
-                  : "border-white/10 bg-white/[0.04] text-white/60 hover:text-white"
+                  ? "border-brand-400/40 bg-brand-500/15 text-brand-100"
+                  : "border-white/10 bg-white/[0.035] text-white/55 hover:border-white/20 hover:text-white"
               )}
             >
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
-              Unggulan
+              <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">Unggulan</span>
             </button>
 
-            <label className="sr-only" htmlFor="sort">
-              Urutkan produk
-            </label>
-            <select
-              id="sort"
-              value={sort}
-              onChange={(event) => setSort(event.target.value as SortKey)}
-              className="h-11 cursor-pointer rounded-xl border border-white/10 bg-ink-900/60 px-3.5 pr-8 text-[13.5px] text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50"
-            >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} className="bg-ink-900">
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-[13.5px] font-medium text-white/70 sm:hidden"
-            >
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-              Kategori
-            </button>
+            <div className="relative min-w-0">
+              <ArrowUpDown
+                className="pointer-events-none absolute left-3 top-1/2 hidden h-3.5 w-3.5 -translate-y-1/2 text-white/35 sm:block"
+                aria-hidden="true"
+              />
+              <label className="sr-only" htmlFor="store-sort">
+                Urutkan produk
+              </label>
+              <select
+                id="store-sort"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as SortKey)}
+                className="h-11 w-full min-w-0 cursor-pointer truncate rounded-xl border border-white/10 bg-ink-950/45 px-3 text-[12.5px] font-medium text-white/70 focus:border-brand-400/40 focus:outline-none focus:ring-2 focus:ring-brand-500/45 sm:pl-8 sm:pr-8 sm:text-[13px]"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-ink-900 text-white">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Category chips */}
-        <div
-          className={cn(
-            "mt-3 flex-wrap gap-2 border-t border-white/[0.07] pt-3",
-            filtersOpen ? "flex" : "hidden sm:flex"
-          )}
-        >
-          {categoryChips.map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() => setCategory(chip.slug)}
-              aria-pressed={category === chip.slug}
-              className={cn(
-                "rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all duration-200",
-                category === chip.slug
-                  ? "border-brand-400/50 bg-brand-500/18 text-white"
-                  : "border-white/10 bg-white/[0.03] text-white/55 hover:border-white/20 hover:text-white"
-              )}
-            >
-              {chip.name}
-            </button>
-          ))}
+        <div className="mt-3 border-t border-white/[0.07] pt-3">
+          <div className="flex items-center gap-3">
+            <span className="hidden shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.11em] text-white/30 sm:inline-flex">
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              Kategori
+            </span>
+            <div className="scrollbar-none -mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 pb-0.5">
+              {categoryChips.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setCategory(chip.slug)}
+                  aria-pressed={category === chip.slug}
+                  className={cn(
+                    "shrink-0 rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
+                    category === chip.slug
+                      ? "border-brand-400/40 bg-brand-500/15 text-brand-100"
+                      : "border-white/[0.09] bg-white/[0.025] text-white/45 hover:border-white/20 hover:text-white/75"
+                  )}
+                >
+                  {chip.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Result meta */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[13.5px] text-white/45" aria-live="polite">
-          Menampilkan <span className="font-semibold text-white">{filtered.length}</span> dari{" "}
-          {products.length} produk
-        </p>
+      <div className="mt-7 flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.07] pb-4">
+        <div>
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-brand-300/65">
+            Hasil Katalog
+          </p>
+          <p className="mt-1 break-words text-[14px] text-white/45" aria-live="polite">
+            <span className="font-semibold text-white">{filtered.length} produk</span> dalam{" "}
+            {activeCategory}
+            {query.trim() ? ` untuk “${query.trim()}”` : ""}
+          </p>
+        </div>
+
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={reset}>
+          <Button variant="ghost" size="sm" onClick={reset} className="h-8 px-2.5 text-[12px]">
             <X className="h-3.5 w-3.5" aria-hidden="true" />
-            Reset filter
+            Reset semua
           </Button>
         )}
       </div>
 
-      {/* Grid */}
       {filtered.length ? (
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
           {filtered.map((product, index) => (
             <ProductCard
               key={product.id}
@@ -238,13 +249,13 @@ export function StoreBrowser({
           title="Produk tidak ditemukan"
           description={
             products.length
-              ? "Coba kata kunci lain atau reset filter untuk melihat semua produk."
+              ? "Coba kata kunci atau kategori lain, lalu reset filter jika diperlukan."
               : "Katalog masih kosong. Tambahkan produk dari Admin Panel."
           }
           action={
             hasFilters ? (
               <Button variant="secondary" onClick={reset}>
-                Reset filter
+                Reset semua filter
               </Button>
             ) : undefined
           }
@@ -252,11 +263,7 @@ export function StoreBrowser({
       )}
 
       {shareProduct && (
-        <ProductShareDialog
-          product={shareProduct}
-          open
-          onClose={closeShareDialog}
-        />
+        <ProductShareDialog product={shareProduct} open onClose={closeShareDialog} />
       )}
     </div>
   );
