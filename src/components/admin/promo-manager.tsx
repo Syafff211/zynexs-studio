@@ -11,15 +11,17 @@ import {
   Users,
   Clock,
   Infinity as InfinityIcon,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlassCard, Badge, EmptyState } from "@/components/ui/card";
 import { Modal, ConfirmDialog } from "@/components/ui/modal";
 import { Field, Input, Select, Checkbox } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { PromoProductSelector } from "@/components/admin/promo-product-selector";
 import { savePromoAction, deletePromoAction, togglePromoActiveAction } from "@/actions/admin";
 import { cn, formatIDR, formatDate, formatDateTime } from "@/lib/utils";
-import type { PromoCode } from "@/types";
+import type { PromoCode, PromoCodeWithProducts, PromoProductOption } from "@/types";
 
 export interface RedemptionRow {
   id: string;
@@ -31,12 +33,15 @@ export interface RedemptionRow {
   order: { order_number: string } | null;
 }
 
-function promoState(promo: PromoCode) {
+function promoState(promo: PromoCodeWithProducts) {
   const expired = promo.expires_at ? new Date(promo.expires_at) <= new Date() : false;
   const full =
     promo.max_redemptions !== null && promo.redemption_count >= promo.max_redemptions;
 
   if (!promo.is_active) return { label: "NONAKTIF", tone: "neutral" as const };
+  if (!promo.applies_to_all && promo.product_ids.length === 0) {
+    return { label: "TANPA PRODUK", tone: "danger" as const };
+  }
   if (expired) return { label: "EXPIRED", tone: "danger" as const };
   if (full) return { label: "FULL", tone: "danger" as const };
   return { label: "AKTIF", tone: "success" as const };
@@ -51,17 +56,23 @@ function toLocalInput(iso: string | null): string {
 
 export function PromoManager({
   promos,
+  products,
   redemptions,
 }: {
-  promos: PromoCode[];
+  promos: PromoCodeWithProducts[];
+  products: PromoProductOption[];
   redemptions: RedemptionRow[];
 }) {
   const { success, error: toastError } = useToast();
-  const [editing, setEditing] = React.useState<PromoCode | null>(null);
+  const [editing, setEditing] = React.useState<PromoCodeWithProducts | null>(null);
   const [creating, setCreating] = React.useState(false);
-  const [deleting, setDeleting] = React.useState<PromoCode | null>(null);
-  const [viewing, setViewing] = React.useState<PromoCode | null>(null);
+  const [deleting, setDeleting] = React.useState<PromoCodeWithProducts | null>(null);
+  const [viewing, setViewing] = React.useState<PromoCodeWithProducts | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const productById = React.useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products]
+  );
 
   const toggle = async (promo: PromoCode) => {
     const result = await togglePromoActiveAction(promo.id, !promo.is_active);
@@ -102,6 +113,9 @@ export function PromoManager({
             const max = promo.max_redemptions;
             const ratio = max ? Math.min(100, (used / max) * 100) : 0;
             const promoRedemptions = redemptions.filter((r) => r.promo_id === promo.id);
+            const scopedProducts = promo.product_ids
+              .map((productId) => productById.get(productId))
+              .filter((product): product is PromoProductOption => Boolean(product));
 
             return (
               <li key={promo.id}>
@@ -126,6 +140,43 @@ export function PromoManager({
                       {promo.description}
                     </p>
                   )}
+
+                  <div
+                    className={cn(
+                      "mt-3 flex items-start gap-2 rounded-xl border px-3 py-2.5",
+                      promo.applies_to_all
+                        ? "border-brand-400/15 bg-brand-500/[0.06]"
+                        : scopedProducts.length
+                          ? "border-violet-400/15 bg-violet-500/[0.06]"
+                          : "border-rose-400/20 bg-rose-500/[0.07]"
+                    )}
+                  >
+                    <Package
+                      className={cn(
+                        "mt-0.5 h-3.5 w-3.5 shrink-0",
+                        promo.applies_to_all
+                          ? "text-brand-300"
+                          : scopedProducts.length
+                            ? "text-violet-300"
+                            : "text-rose-300"
+                      )}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[11.5px] font-semibold text-white/70">
+                        {promo.applies_to_all
+                          ? "Berlaku untuk semua produk"
+                          : scopedProducts.length
+                            ? `${scopedProducts.length} produk terpilih`
+                            : "Tidak ada produk yang memenuhi syarat"}
+                      </p>
+                      {!promo.applies_to_all && scopedProducts.length > 0 && (
+                        <p className="mt-0.5 line-clamp-1 text-[10.5px] text-white/35">
+                          {scopedProducts.map((product) => product.name).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Redemption meter */}
                   <div className="mt-4">
@@ -285,6 +336,7 @@ export function PromoManager({
       {(creating || editing) && (
         <PromoFormModal
           promo={editing}
+          products={products}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -343,7 +395,15 @@ export function PromoManager({
   );
 }
 
-function PromoFormModal({ promo, onClose }: { promo: PromoCode | null; onClose: () => void }) {
+function PromoFormModal({
+  promo,
+  products,
+  onClose,
+}: {
+  promo: PromoCodeWithProducts | null;
+  products: PromoProductOption[];
+  onClose: () => void;
+}) {
   const { success, error: toastError } = useToast();
   const [saving, setSaving] = React.useState(false);
   const [type, setType] = React.useState(promo?.discount_type ?? "fixed");
@@ -441,7 +501,11 @@ function PromoFormModal({ promo, onClose }: { promo: PromoCode | null; onClose: 
           />
         </Field>
 
-        <Field label="Minimum Belanja (Rp)" htmlFor="pr-min">
+        <Field
+          label="Minimum Belanja (Rp)"
+          htmlFor="pr-min"
+          hint="Dihitung hanya dari produk yang memenuhi syarat"
+        >
           <Input
             id="pr-min"
             name="minPurchase"
@@ -481,9 +545,15 @@ function PromoFormModal({ promo, onClose }: { promo: PromoCode | null; onClose: 
             name="description"
             defaultValue={promo?.description ?? ""}
             maxLength={200}
-            placeholder="Promo September untuk semua produk digital"
+            placeholder="Contoh: Diskon khusus produk Canva Pro"
           />
         </Field>
+
+        <PromoProductSelector
+          products={products}
+          initialAppliesToAll={promo?.applies_to_all ?? true}
+          initialProductIds={promo?.product_ids ?? []}
+        />
 
         <div className="sm:col-span-2">
           <Checkbox name="isActive" label="Promo aktif" defaultChecked={promo?.is_active ?? true} />
