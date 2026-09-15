@@ -261,61 +261,95 @@ async function main() {
   console.log(`✓ ${CATEGORIES.length} kategori`);
 
   /* ---------------- Products ---------------- */
+  const productIds = new Map<string, string>();
   for (const product of PRODUCTS) {
     const { category, ...rest } = product;
-    const { error } = await db.from("products").upsert(
-      {
-        ...rest,
-        category_id: categoryIds.get(category) ?? null,
-        is_active: true,
-        is_custom_price: product.is_custom_price ?? false,
-      },
-      { onConflict: "slug" }
-    );
+    const { data, error } = await db
+      .from("products")
+      .upsert(
+        {
+          ...rest,
+          category_id: categoryIds.get(category) ?? null,
+          is_active: true,
+          is_custom_price: product.is_custom_price ?? false,
+        },
+        { onConflict: "slug" }
+      )
+      .select("id, slug")
+      .single();
     if (error) throw new Error(`products (${product.slug}): ${error.message}`);
+    productIds.set(data.slug, data.id);
   }
   console.log(`✓ ${PRODUCTS.length} produk`);
 
   /* ---------------- Promo codes ---------------- */
-  const { data: existingPromo } = await db
-    .from("promo_codes")
-    .select("id")
-    .eq("code", "PROMOZYN")
-    .maybeSingle();
+  const canvaProductId = productIds.get("canva-pro");
+  if (!canvaProductId) throw new Error("products: Canva Pro tidak ditemukan setelah upsert");
 
-  if (!existingPromo) {
-    const { error } = await db.from("promo_codes").insert([
-      {
-        code: "PROMOZYN",
-        description: "Promo September — potongan Rp10.000 untuk semua produk digital.",
-        discount_type: "fixed",
-        discount_value: 10000,
-        min_purchase: 20000,
-        max_redemptions: 3,
-        is_active: true,
-      },
-      {
-        code: "ZYNEX20",
-        description: "Diskon 20% (maks Rp15.000) untuk pembelian minimal Rp10.000.",
-        discount_type: "percentage",
-        discount_value: 20,
-        max_discount: 15000,
-        min_purchase: 10000,
-        max_redemptions: 50,
-        is_active: true,
-      },
-      {
-        code: "HEMAT2K",
-        description: "Potongan Rp2.000 tanpa minimum belanja.",
-        discount_type: "fixed",
-        discount_value: 2000,
-        min_purchase: 0,
-        max_redemptions: 100,
-        is_active: true,
-      },
-    ]);
-    if (error) throw new Error(`promo_codes: ${error.message}`);
-    console.log("✓ 3 kode promo (PROMOZYN, ZYNEX20, HEMAT2K)");
+  const seedPromos = [
+    {
+      code: "PROMOZYN",
+      description: "Promo September — potongan Rp10.000 untuk semua produk digital.",
+      discountType: "fixed",
+      discountValue: 10000,
+      maxDiscount: null,
+      minPurchase: 20000,
+      maxRedemptions: 3,
+      productIds: [] as string[],
+    },
+    {
+      code: "ZYNEX20",
+      description: "Diskon 20% (maks Rp15.000) untuk pembelian minimal Rp10.000.",
+      discountType: "percentage",
+      discountValue: 20,
+      maxDiscount: 15000,
+      minPurchase: 10000,
+      maxRedemptions: 50,
+      productIds: [] as string[],
+    },
+    {
+      code: "HEMAT2K",
+      description: "Potongan Rp2.000 khusus Canva Pro tanpa minimum belanja.",
+      discountType: "fixed",
+      discountValue: 2000,
+      maxDiscount: null,
+      minPurchase: 0,
+      maxRedemptions: 100,
+      productIds: [canvaProductId],
+    },
+  ] as const;
+
+  let insertedPromoCount = 0;
+  for (const promo of seedPromos) {
+    const { data: existingPromo } = await db
+      .from("promo_codes")
+      .select("id")
+      .eq("code", promo.code)
+      .maybeSingle();
+
+    if (existingPromo) continue;
+
+    const { error } = await db.rpc("save_promo_with_products", {
+      p_id: null,
+      p_code: promo.code,
+      p_description: promo.description,
+      p_discount_type: promo.discountType,
+      p_discount_value: promo.discountValue,
+      p_max_discount: promo.maxDiscount,
+      p_min_purchase: promo.minPurchase,
+      p_max_redemptions: promo.maxRedemptions,
+      p_expires_at: null,
+      p_is_active: true,
+      p_product_ids: promo.productIds,
+    });
+    if (error) throw new Error(`promo_codes (${promo.code}): ${error.message}`);
+    insertedPromoCount += 1;
+  }
+
+  if (insertedPromoCount) {
+    console.log(
+      `✓ ${insertedPromoCount} kode promo baru (HEMAT2K hanya untuk Canva Pro)`
+    );
   } else {
     console.log("• kode promo sudah ada, dilewati");
   }
