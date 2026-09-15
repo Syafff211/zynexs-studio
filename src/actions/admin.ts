@@ -296,28 +296,29 @@ export async function savePromoAction(
     maxRedemptions: formData.get("maxRedemptions") || undefined,
     expiresAt: formData.get("expiresAt") ?? "",
     isActive: formData.get("isActive") === "on",
+    scope: formData.get("scope") || "all",
+    productIds: formData.getAll("productIds"),
   });
 
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const input = parsed.data;
 
   const admin = createAdminClient();
-  const payload = {
-    code: input.code,
-    description: input.description || null,
-    discount_type: input.discountType,
-    discount_value: input.discountValue,
-    max_discount: input.maxDiscount && input.maxDiscount > 0 ? input.maxDiscount : null,
-    min_purchase: input.minPurchase ?? 0,
-    max_redemptions:
+  const { error } = await admin.rpc("save_promo_with_products", {
+    p_id: input.id ?? null,
+    p_code: input.code,
+    p_description: input.description || "",
+    p_discount_type: input.discountType,
+    p_discount_value: input.discountValue,
+    p_max_discount: input.maxDiscount && input.maxDiscount > 0 ? input.maxDiscount : null,
+    p_min_purchase: input.minPurchase ?? 0,
+    p_max_redemptions:
       input.maxRedemptions && input.maxRedemptions > 0 ? input.maxRedemptions : null,
-    expires_at: toNullableDate(input.expiresAt),
-    is_active: input.isActive,
-  };
-
-  const { error } = input.id
-    ? await admin.from("promo_codes").update(payload).eq("id", input.id)
-    : await admin.from("promo_codes").insert(payload);
+    p_expires_at: toNullableDate(input.expiresAt),
+    p_is_active: input.isActive,
+    // Empty means global. The RPC replaces scope rows atomically with the promo.
+    p_product_ids: input.scope === "selected" ? [...new Set(input.productIds)] : [],
+  });
 
   if (error) {
     if (error.code === "23505") return { ok: false, message: "Kode promo sudah ada." };
@@ -326,13 +327,23 @@ export async function savePromoAction(
         ok: false,
         message: "Batas redemption tidak boleh lebih kecil dari jumlah yang sudah terpakai.",
       };
-    return { ok: false, message: "Gagal menyimpan promo." };
+    if (error.code === "22023") return { ok: false, message: error.message };
+    if (["PGRST202", "42P01", "42703"].includes(error.code)) {
+      return {
+        ok: false,
+        message: "Schema promo terbaru belum terpasang. Jalankan ulang supabase/schema.sql.",
+      };
+    }
+    return { ok: false, message: "Gagal menyimpan promo dan cakupan produknya." };
   }
 
   revalidatePath("/admin/promo");
   updateTag(CACHE_TAGS.promos);
   revalidatePath("/promo");
-  return { ok: true, message: input.id ? "Promo diperbarui." : "Promo berhasil dibuat." };
+  return {
+    ok: true,
+    message: input.id ? "Promo dan cakupan produk diperbarui." : "Promo berhasil dibuat.",
+  };
 }
 
 export async function togglePromoActiveAction(
