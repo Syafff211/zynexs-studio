@@ -88,8 +88,23 @@ export interface PromoCode {
   redemption_count: number;
   expires_at: string | null;
   is_active: boolean;
+  applies_to_all: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** Admin representation. Product ids are populated when applies_to_all is false. */
+export interface PromoCodeWithProducts extends PromoCode {
+  product_ids: string[];
+}
+
+export interface PromoProductOption {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  is_custom_price: boolean;
+  category: Pick<Category, "name"> | null;
 }
 
 export interface PromoRedemption {
@@ -206,7 +221,8 @@ export type PromoStatus =
   | "expired"
   | "limit_reached"
   | "already_used"
-  | "min_purchase";
+  | "min_purchase"
+  | "not_applicable";
 
 export interface PromoValidationResult {
   status: PromoStatus;
