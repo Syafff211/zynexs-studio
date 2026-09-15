@@ -197,6 +197,14 @@ export interface PublicPromo {
   max_redemptions: number | null;
   redemption_count: number;
   expires_at: string | null;
+  applies_to_all: boolean;
+  applicable_products: { id: string; name: string; slug: string }[];
+}
+
+interface PublicPromoQueryRow extends Omit<PublicPromo, "applicable_products"> {
+  promo_products:
+    | { product: { id: string; name: string; slug: string; is_active: boolean } | null }[]
+    | null;
 }
 
 export const getPublicPromos = cache(async (): Promise<PublicPromo[]> => {
@@ -210,14 +218,26 @@ export const getPublicPromos = cache(async (): Promise<PublicPromo[]> => {
     const { data, error } = await admin
       .from("promo_codes")
       .select(
-        "code, description, discount_type, discount_value, min_purchase, max_redemptions, redemption_count, expires_at"
+        "code, description, discount_type, discount_value, min_purchase, max_redemptions, redemption_count, expires_at, applies_to_all, promo_products(product:products(id, name, slug, is_active))"
       )
       .eq("is_active", true)
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .order("created_at", { ascending: false });
 
     if (error) return [];
-    return (data ?? []) as PublicPromo[];
+
+    return ((data ?? []) as unknown as PublicPromoQueryRow[]).map(
+      ({ promo_products: links, ...promo }) => ({
+        ...promo,
+        applicable_products: (links ?? [])
+          .map((link) => link.product)
+          .filter(
+            (product): product is NonNullable<typeof product> =>
+              Boolean(product?.is_active)
+          )
+          .map(({ id, name, slug }) => ({ id, name, slug })),
+      })
+    );
   } catch {
     return [];
   }
