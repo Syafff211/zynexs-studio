@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { MessageCircle, ShieldCheck } from "lucide-react";
 import { StoreBrowser } from "@/components/store/store-browser";
 import { ProductCardSkeleton } from "@/components/store/product-card";
 import { getProducts, getCategories } from "@/services/catalog";
@@ -32,18 +33,40 @@ export default async function StorePage({
   const params = await searchParams;
 
   return (
-    <div className="container-page py-10 sm:py-14">
-      <header className="mb-8 max-w-2xl">
-        <span className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-200">
-          Marketplace
-        </span>
-        <h1 className="mt-4 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Semua produk <span className="text-gradient">digital</span> Zynex Studio
-        </h1>
-        <p className="mt-3 text-pretty text-[15px] leading-relaxed text-white/55">
-          Domain, akun AI, tools desain, hingga layanan sosial media. Pilih, checkout, langsung
-          diproses lewat WhatsApp.
-        </p>
+    <div className="container-page py-8 sm:py-12">
+      <header className="relative mb-6 overflow-hidden rounded-3xl border border-white/[0.09] bg-ink-900/65 px-5 py-7 shadow-[0_24px_70px_-38px_rgba(31,69,245,0.65)] sm:px-8 sm:py-9">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-brand-500/15 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-accent-500/[0.08] blur-3xl"
+        />
+
+        <div className="relative max-w-3xl">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/20 bg-brand-500/[0.09] px-3.5 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-brand-200">
+            Katalog Digital
+          </span>
+          <h1 className="mt-4 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-[2.65rem] lg:leading-[1.08]">
+            Produk digital pilihan, <span className="text-gradient">siap diproses cepat.</span>
+          </h1>
+          <p className="mt-3 max-w-2xl text-pretty text-[14.5px] leading-relaxed text-white/55 sm:text-[15px]">
+            Temukan domain, akses AI, tools desain, dan layanan sosial media dalam satu katalog yang
+            ringkas dan mudah dicari.
+          </p>
+
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2.5 text-[12.5px] text-white/50">
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+              Harga diverifikasi server
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-brand-300" aria-hidden="true" />
+              Checkout langsung ke WhatsApp
+            </span>
+          </div>
+        </div>
       </header>
 
       <Suspense fallback={<StoreSkeleton />}>
@@ -68,8 +91,14 @@ async function StoreResults({ query, category }: { query: string; category: stri
 function StoreSkeleton() {
   return (
     <div>
-      <div className="skeleton h-20 rounded-2xl" />
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="skeleton h-28 rounded-2xl" />
+      <div className="mt-7 flex items-center justify-between border-b border-white/[0.07] pb-4">
+        <div className="space-y-2">
+          <div className="skeleton h-2.5 w-20 rounded" />
+          <div className="skeleton h-4 w-40 rounded" />
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
         {Array.from({ length: 8 }).map((_, index) => (
           <ProductCardSkeleton key={index} />
         ))}
