@@ -6,8 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Field, Select, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { updateOrderStatusAction } from "@/actions/admin";
-import { ORDER_STATUSES, ORDER_STATUS_LABEL } from "@/lib/constants";
+import { ORDER_STATUS_LABEL } from "@/lib/constants";
 import type { OrderStatus } from "@/types";
+
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ["cancelled"],
+  pending_payment: ["cancelled"],
+  under_review: [],
+  paid: ["processing", "refunded"],
+  rejected: ["cancelled"],
+  expired: [],
+  processing: ["completed", "refunded"],
+  completed: ["refunded"],
+  cancelled: [],
+  refunded: [],
+};
 
 export function OrderStatusForm({
   orderId,
@@ -20,6 +33,7 @@ export function OrderStatusForm({
 }) {
   const { success, error: toastError } = useToast();
   const [saving, setSaving] = React.useState(false);
+  const options = [status, ...ALLOWED_TRANSITIONS[status]];
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -36,7 +50,7 @@ export function OrderStatusForm({
 
       <Field label="Status Pesanan" htmlFor="status" required>
         <Select id="status" name="status" defaultValue={status}>
-          {ORDER_STATUSES.map((value) => (
+          {options.map((value) => (
             <option key={value} value={value} className="bg-ink-900">
               {ORDER_STATUS_LABEL[value]}
             </option>
