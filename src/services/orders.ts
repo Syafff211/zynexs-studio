@@ -1,8 +1,9 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { quoteCart, PricingError } from "@/services/pricing";
-import { buildOrderMessage, buildWhatsAppUrl } from "@/services/whatsapp";
 import { PROMO_MESSAGES } from "@/lib/constants";
+import { paymentExpiryMinutes } from "@/lib/env";
+import { buildPaymentPath } from "@/lib/payment-access";
 import { normalizePhone } from "@/lib/utils";
 import type { CheckoutInput } from "@/lib/validations";
 import type { OrderWithItems, PromoStatus } from "@/types";
@@ -12,7 +13,7 @@ export interface CreateOrderResult {
   message: string;
   orderId?: string;
   orderNumber?: string;
-  whatsappUrl?: string;
+  paymentUrl?: string;
   total?: number;
   promoStatus?: PromoStatus;
 }
@@ -21,33 +22,38 @@ export interface CreateOrderResult {
  * Creates an order end-to-end, server-side:
  *  1. re-prices the cart from the database
  *  2. validates + atomically redeems the promo (race-condition safe)
- *  3. persists order + order_items (price snapshots) + payment row
- *  4. generates the WhatsApp deep link
+ *  3. persists order + order_items (price snapshots) + QRIS payment row
+ *  4. returns a signed payment-page path for guest checkouts
  *
  * Idempotent: replaying the same idempotencyKey returns the original order
  * instead of creating a duplicate, so double-clicking checkout is harmless.
  */
 export async function createOrder(
   input: CheckoutInput,
-  userId: string | null,
-  whatsappNumber: string
+  userId: string | null
 ): Promise<CreateOrderResult> {
   const admin = createAdminClient();
 
   // ---- 0. Idempotency: has this exact submission already been processed? --
   const { data: existing } = await admin
     .from("orders")
-    .select("id, order_number, whatsapp_url, total")
+    .select("id, order_number, total, user_id, customer_email")
     .eq("idempotency_key", input.idempotencyKey)
     .maybeSingle();
 
   if (existing) {
+    const sameCustomer =
+      String(existing.customer_email).toLowerCase() === input.customerEmail.toLowerCase() &&
+      (!existing.user_id || existing.user_id === userId);
+    if (!sameCustomer) return { ok: false, message: "Kunci checkout sudah digunakan." };
+
+    const orderId = existing.id as string;
     return {
       ok: true,
       message: "Order sudah dibuat sebelumnya.",
-      orderId: existing.id as string,
+      orderId,
       orderNumber: existing.order_number as string,
-      whatsappUrl: (existing.whatsapp_url as string) ?? undefined,
+      paymentUrl: buildPaymentPath(orderId, !existing.user_id),
       total: existing.total as number,
     };
   }
@@ -92,7 +98,9 @@ export async function createOrder(
       total: usePromo ? quote.total : quote.subtotal,
       promo_id: usePromo ? quote.promo!.promoId : null,
       promo_code: usePromo ? quote.promo!.code : null,
-      status: "pending",
+      status: "pending_payment",
+      payment_method: "qris_dana_static",
+      expires_at: new Date(Date.now() + paymentExpiryMinutes() * 60_000).toISOString(),
       notes: input.notes?.trim() || null,
       idempotency_key: input.idempotencyKey,
     })
@@ -104,16 +112,22 @@ export async function createOrder(
     if (orderError?.code === "23505") {
       const { data: raced } = await admin
         .from("orders")
-        .select("id, order_number, whatsapp_url, total")
+        .select("id, order_number, total, user_id, customer_email")
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();
       if (raced) {
+        const sameCustomer =
+          String(raced.customer_email).toLowerCase() === input.customerEmail.toLowerCase() &&
+          (!raced.user_id || raced.user_id === userId);
+        if (!sameCustomer) return { ok: false, message: "Kunci checkout sudah digunakan." };
+
+        const racedOrderId = raced.id as string;
         return {
           ok: true,
           message: "Order sudah dibuat sebelumnya.",
-          orderId: raced.id as string,
+          orderId: racedOrderId,
           orderNumber: raced.order_number as string,
-          whatsappUrl: (raced.whatsapp_url as string) ?? undefined,
+          paymentUrl: buildPaymentPath(racedOrderId, !raced.user_id),
           total: raced.total as number,
         };
       }
@@ -142,7 +156,20 @@ export async function createOrder(
     return { ok: false, message: "Gagal menyimpan item pesanan. Coba lagi." };
   }
 
-  // ---- 6. Atomic promo redemption (row-locked in Postgres) ----------------
+  // ---- 6. Unpaid QRIS payment record --------------------------------------
+  const { error: paymentError } = await admin.from("payments").insert({
+    order_id: orderId,
+    method: "qris_dana_static",
+    amount: orderRow.total as number,
+    status: "unpaid",
+  });
+
+  if (paymentError) {
+    await admin.from("orders").delete().eq("id", orderId);
+    return { ok: false, message: "Gagal menyiapkan pembayaran QRIS. Coba lagi." };
+  }
+
+  // ---- 7. Atomic promo redemption (row-locked in Postgres) ----------------
   if (usePromo) {
     const { data: redeemStatus, error: redeemError } = await admin.rpc("redeem_promo", {
       p_promo_id: quote.promo!.promoId,
@@ -152,11 +179,9 @@ export async function createOrder(
       p_amount: quote.discount,
     });
 
-    // The RPC returns 'ok' on success, otherwise a PromoStatus reason.
     const status = typeof redeemStatus === "string" ? redeemStatus : "invalid";
 
     if (redeemError || status !== "ok") {
-      // Roll the order back entirely: no half-finished orders in the DB.
       await admin.from("orders").delete().eq("id", orderId);
       const failStatus: PromoStatus =
         status in PROMO_MESSAGES && status !== "valid" ? (status as PromoStatus) : "invalid";
@@ -168,49 +193,27 @@ export async function createOrder(
     }
   }
 
-  // ---- 7. Payment record (WhatsApp / manual settlement) -------------------
-  await admin.from("payments").insert({
-    order_id: orderId,
-    method: "whatsapp",
-    amount: orderRow.total as number,
-    status: "unpaid",
+  // Sold counters are intentionally incremented only by the database when an
+  // admin approves a real payment — creating an unpaid order is not a sale.
+  const { error: auditError } = await admin.from("audit_logs").insert({
+    actor_id: userId,
+    action: "order.created",
+    entity_type: "order",
+    entity_id: orderId,
+    metadata: {
+      to: "pending_payment",
+      method: "qris_dana_static",
+      amount: orderRow.total as number,
+    },
   });
-
-  // ---- 8. Bump sold counters (non-critical) -------------------------------
-  await Promise.all(
-    quote.lines.map((line) =>
-      admin.rpc("increment_sold_count", { p_product_id: line.productId, p_qty: line.quantity })
-    )
-  ).catch(() => undefined);
-
-  // ---- 9. WhatsApp message ------------------------------------------------
-  const message = buildOrderMessage({
-    orderNumber,
-    customerName: input.customerName,
-    customerEmail: input.customerEmail,
-    customerPhone: input.customerPhone,
-    items: quote.lines.map((line) => ({
-      name: line.productName,
-      quantity: line.quantity,
-      subtotal: line.subtotal,
-    })),
-    subtotal: quote.subtotal,
-    discount: usePromo ? quote.discount : 0,
-    total: orderRow.total as number,
-    promoCode: usePromo ? quote.promo!.code : null,
-    notes: input.notes,
-    status: "pending",
-  });
-
-  const whatsappUrl = buildWhatsAppUrl(whatsappNumber, message);
-  await admin.from("orders").update({ whatsapp_url: whatsappUrl }).eq("id", orderId);
+  if (auditError) console.error("[order:audit]", auditError);
 
   return {
     ok: true,
     message: "Order berhasil dibuat!",
     orderId,
     orderNumber,
-    whatsappUrl,
+    paymentUrl: buildPaymentPath(orderId, !userId),
     total: orderRow.total as number,
   };
 }
