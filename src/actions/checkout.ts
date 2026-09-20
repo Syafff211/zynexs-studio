@@ -5,9 +5,9 @@ import { getSessionUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
 import { quoteCart, PricingError } from "@/services/pricing";
 import { createOrder } from "@/services/orders";
-import { getSiteSettings } from "@/services/catalog";
 import { checkoutSchema, quoteSchema, firstError } from "@/lib/validations";
-import { PROMO_MESSAGES, WHATSAPP_NUMBER } from "@/lib/constants";
+import { PROMO_MESSAGES } from "@/lib/constants";
+import { isStaticQrisConfigured } from "@/lib/qris";
 import type { PromoStatus } from "@/types";
 
 export interface QuoteResult {
@@ -124,13 +124,15 @@ export interface CheckoutResult {
   description?: string;
   orderId?: string;
   orderNumber?: string;
-  whatsappUrl?: string;
+  paymentUrl?: string;
+  total?: number;
   promoStatus?: PromoStatus;
 }
 
 /**
- * Creates a real order. Prices, discounts and totals are recalculated
- * server-side; the WhatsApp link is only returned when the order exists.
+ * Creates a real pending-payment order. Prices, discounts and totals are
+ * recalculated server-side; a payment-page path is returned only after the
+ * order, snapshots and unpaid QRIS payment record exist.
  */
 export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
   if (!isSupabaseConfigured()) {
@@ -142,12 +144,17 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     return { ok: false, message: firstError(parsed.error) };
   }
 
+  if (!isStaticQrisConfigured()) {
+    return {
+      ok: false,
+      message: "Pembayaran QRIS belum dikonfigurasi. Admin harus memasang public/qris.jpg resmi.",
+    };
+  }
+
   const user = await getSessionUser();
-  const settings = await getSiteSettings();
-  const number = settings.whatsapp_number || WHATSAPP_NUMBER;
 
   try {
-    const result = await createOrder(parsed.data, user?.id ?? null, number);
+    const result = await createOrder(parsed.data, user?.id ?? null);
 
     if (!result.ok) {
       return {
@@ -163,10 +170,11 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     return {
       ok: true,
       message: "Order berhasil dibuat!",
-      description: "Silakan lanjutkan melalui WhatsApp.",
+      description: "Lanjutkan ke halaman pembayaran QRIS.",
       orderId: result.orderId,
       orderNumber: result.orderNumber,
-      whatsappUrl: result.whatsappUrl,
+      paymentUrl: result.paymentUrl,
+      total: result.total,
     };
   } catch (error) {
     console.error("[checkout]", error);
