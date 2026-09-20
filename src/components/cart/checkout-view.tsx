@@ -4,15 +4,14 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  MessageCircle,
+  QrCode,
   ShieldCheck,
   ShoppingBag,
   ArrowRight,
   Check,
   Tag,
   X,
-  CircleCheckBig,
-  Copy,
+  TriangleAlert,
 } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { GlassCard, EmptyState, Skeleton, Badge } from "@/components/ui/card";
@@ -23,20 +22,20 @@ import { quoteCartAction, checkoutAction, type QuoteResult } from "@/actions/che
 import { cn, formatIDR } from "@/lib/utils";
 import type { Profile } from "@/types";
 
-interface SuccessState {
-  orderNumber: string;
-  total: number;
-  whatsappUrl: string;
-}
-
 function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-export function CheckoutView({ profile }: { profile: Profile | null }) {
+export function CheckoutView({
+  profile,
+  qrisConfigured,
+}: {
+  profile: Profile | null;
+  qrisConfigured: boolean;
+}) {
   const { items, hydrated, promoCode, clear, setPromoCode } = useCart();
-  const { success, error: toastError } = useToast();
+  const { error: toastError } = useToast();
   const router = useRouter();
 
   const [form, setForm] = React.useState({
@@ -49,7 +48,6 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
   const [quote, setQuote] = React.useState<QuoteResult | null>(null);
   const [quoting, startQuote] = React.useTransition();
   const [submitting, setSubmitting] = React.useState(false);
-  const [result, setResult] = React.useState<SuccessState | null>(null);
 
   // A stable key per checkout attempt → replaying it can never duplicate an order.
   const idempotencyKeyRef = React.useRef<string>(newIdempotencyKey());
@@ -116,25 +114,15 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
         idempotencyKey: idempotencyKeyRef.current,
       });
 
-      if (!response.ok || !response.whatsappUrl || !response.orderNumber) {
-        // Never open WhatsApp when the order failed.
+      if (!response.ok || !response.paymentUrl || !response.orderNumber) {
         toastError("Gagal membuat pesanan", response.message);
         if (response.promoStatus && response.promoStatus !== "valid") setPromoCode(null);
         idempotencyKeyRef.current = newIdempotencyKey();
         return;
       }
 
-      success("Order berhasil dibuat!", "Silakan lanjutkan melalui WhatsApp.");
-      setResult({
-        orderNumber: response.orderNumber,
-        total: quote?.total ?? 0,
-        whatsappUrl: response.whatsappUrl,
-      });
       clear();
-
-      // Open WhatsApp only after the order exists in the database.
-      window.open(response.whatsappUrl, "_blank", "noopener,noreferrer");
-      router.refresh();
+      router.push(response.paymentUrl);
     } catch {
       toastError("Terjadi kesalahan", "Coba lagi dalam beberapa saat.");
       idempotencyKeyRef.current = newIdempotencyKey();
@@ -142,60 +130,6 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
       setSubmitting(false);
     }
   };
-
-  /* ---------------- Success state ---------------- */
-  if (result) {
-    return (
-      <GlassCard solid className="mx-auto max-w-xl p-7 text-center sm:p-10">
-        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-300 ring-1 ring-emerald-400/25">
-          <CircleCheckBig className="h-8 w-8" aria-hidden="true" />
-        </span>
-        <h2 className="mt-5 text-2xl font-bold text-white">Order berhasil dibuat!</h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-white/55">
-          Silakan lanjutkan melalui WhatsApp untuk menyelesaikan pesanan kamu.
-        </p>
-
-        <div className="mt-6 rounded-2xl border border-white/[0.09] bg-white/[0.03] p-5">
-          <p className="text-[12px] font-medium uppercase tracking-wider text-white/40">
-            Nomor Order
-          </p>
-          <p className="mt-1.5 font-mono text-xl font-bold tracking-wide text-brand-200">
-            {result.orderNumber}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard?.writeText(result.orderNumber);
-              success("Nomor order disalin");
-            }}
-            className="mx-auto mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12.5px] text-white/45 transition-colors hover:text-white"
-          >
-            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-            Salin nomor order
-          </button>
-        </div>
-
-        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
-          <a
-            href={result.whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonStyles("primary", "lg", "w-full")}
-          >
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            Buka WhatsApp
-          </a>
-          <Link href="/account/orders" className={buttonStyles("secondary", "lg", "w-full")}>
-            Lihat Pesanan
-          </Link>
-        </div>
-
-        <p className="mt-4 text-[12.5px] text-white/35">
-          WhatsApp tidak terbuka otomatis? Klik tombol di atas.
-        </p>
-      </GlassCard>
-    );
-  }
 
   /* ---------------- Loading / empty ---------------- */
   if (!hydrated) {
@@ -232,6 +166,21 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
     <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-start">
       {/* Customer details */}
       <div className="space-y-6">
+        {!qrisConfigured && (
+          <GlassCard solid className="border-amber-400/25 bg-amber-500/[0.06] p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+              <div>
+                <h2 className="font-semibold text-amber-100">Pembayaran QRIS belum tersedia</h2>
+                <p className="mt-1 text-[13.5px] leading-relaxed text-amber-100/65">
+                  Admin belum memasang foto QRIS resmi. Order baru dinonaktifkan agar pelanggan
+                  tidak diarahkan ke pembayaran yang belum siap.
+                </p>
+              </div>
+            </div>
+          </GlassCard>
+        )}
+
         <GlassCard solid className="p-5 sm:p-6">
           <h2 className="text-lg font-semibold text-white">Data Pemesan</h2>
           <p className="mt-1 text-[13.5px] text-white/50">
@@ -385,11 +334,11 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
           <div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
             <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-100">
               <Check className="h-4 w-4" aria-hidden="true" />
-              Pesanan siap dibuat
+              Harga divalidasi server
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-emerald-100/70">
-              Setelah checkout, kamu akan diarahkan ke WhatsApp Zynex Studio untuk melanjutkan
-              pemesanan.
+              Setelah order tersimpan, kamu akan diarahkan ke halaman QRIS. Masukkan nominal
+              tepat sesuai total order, lalu unggah bukti pembayaran.
             </p>
           </div>
 
@@ -398,22 +347,22 @@ export function CheckoutView({ profile }: { profile: Profile | null }) {
             size="lg"
             className="mt-5 w-full"
             loading={submitting}
-            disabled={submitting || quoting || !items.length}
+            disabled={submitting || quoting || !items.length || !qrisConfigured}
           >
             {submitting ? (
               "Membuat Pesanan..."
             ) : (
               <>
-                <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                Checkout via WhatsApp →
+                <QrCode className="h-4 w-4" aria-hidden="true" />
+                Buat Order &amp; Bayar QRIS →
               </>
             )}
           </Button>
 
           <p className="mt-3.5 flex items-start gap-2 text-[12px] leading-relaxed text-white/35">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Order dibuat di server terlebih dahulu. WhatsApp hanya terbuka jika order berhasil
-            tersimpan.
+            Klik tombol tidak menandai order sebagai lunas. Status PAID hanya diberikan setelah
+            bukti diverifikasi admin.
           </p>
 
           {!profile && (
