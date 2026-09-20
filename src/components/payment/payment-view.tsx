@@ -292,7 +292,7 @@ export function PaymentView({
               <div>
                 <h2 className="flex items-center gap-2 text-[17px] font-semibold text-white">
                   <QrCode className="h-5 w-5 text-brand-300" aria-hidden="true" />
-                  QRIS Statis DANA Bisnis
+                  QRIS
                 </h2>
                 <p className="mt-1 text-[12.5px] text-white/42">Scan menggunakan aplikasi pembayaran yang mendukung QRIS.</p>
               </div>
