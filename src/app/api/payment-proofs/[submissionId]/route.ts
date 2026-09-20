@@ -1,48 +1,28 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { PaymentView } from "@/components/payment/payment-view";
-import { isStaticQrisConfigured } from "@/lib/qris";
-import { waLink } from "@/lib/utils";
-import { getSiteSettings } from "@/services/catalog";
-import { getPaymentOrderView } from "@/services/payment";
+import { getAuthorizedProof } from "@/services/payment";
 
-export const metadata: Metadata = {
-  title: "Pembayaran QRIS",
-  description: "Detail pembayaran dan status verifikasi order Zynex Studio.",
-  robots: { index: false, follow: false, noarchive: true },
-};
+export const dynamic = "force-dynamic";
 
-export default async function PaymentPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orderId: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const [{ orderId }, query] = await Promise.all([params, searchParams]);
-  const rawAccess = query.access;
-  const accessToken = typeof rawAccess === "string" ? rawAccess : "";
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ submissionId: string }> }
+) {
+  const { submissionId } = await params;
+  const accessToken = new URL(request.url).searchParams.get("access");
+  const proof = await getAuthorizedProof(submissionId, accessToken);
 
-  const [payment, settings] = await Promise.all([
-    getPaymentOrderView(orderId, accessToken),
-    getSiteSettings(),
-  ]);
-  if (!payment) notFound();
+  if (!proof) {
+    return Response.json({ error: "Bukti tidak ditemukan atau akses ditolak." }, { status: 404 });
+  }
 
-  const helpUrl = waLink(
-    settings.whatsapp_number,
-    `Halo Zynex Studio, saya membutuhkan bantuan untuk pembayaran order ${payment.order.order_number}.`
-  );
-
-  return (
-    <div className="container-page py-8 sm:py-12">
-      <PaymentView
-        initialOrder={payment.order}
-        accessToken={accessToken}
-        canUseRealtime={payment.canUseRealtime}
-        qrisConfigured={isStaticQrisConfigured()}
-        helpUrl={helpUrl}
-      />
-    </div>
-  );
+  const safeName = proof.originalName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120);
+  return new Response(proof.data, {
+    status: 200,
+    headers: {
+      "Content-Type": proof.contentType,
+      "Content-Disposition": `inline; filename="${safeName || "bukti-pembayaran"}"`,
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+    },
+  });
 }
