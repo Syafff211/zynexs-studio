@@ -2,7 +2,11 @@ export type UserRole = "user" | "admin";
 
 export type OrderStatus =
   | "pending"
+  | "pending_payment"
+  | "under_review"
   | "paid"
+  | "rejected"
+  | "expired"
   | "processing"
   | "completed"
   | "cancelled"
@@ -16,6 +20,8 @@ export type PaymentStatus =
   | "paid"
   | "failed"
   | "refunded";
+
+export type PaymentSubmissionStatus = "submitted" | "approved" | "rejected";
 
 export interface ProductFaq {
   question: string;
@@ -133,6 +139,9 @@ export interface Order {
   notes: string | null;
   admin_notes: string | null;
   whatsapp_url: string | null;
+  payment_method: string;
+  expires_at: string | null;
+  paid_at: string | null;
   idempotency_key: string | null;
   created_at: string;
   updated_at: string;
@@ -153,6 +162,64 @@ export interface OrderItem {
 
 export interface OrderWithItems extends Order {
   order_items: OrderItem[];
+}
+
+export interface PaymentSubmission {
+  id: string;
+  order_id: string;
+  proof_path: string;
+  original_name: string;
+  content_type: string;
+  file_size: number;
+  note: string | null;
+  review_note: string | null;
+  status: PaymentSubmissionStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  idempotency_key: string;
+  submitted_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/** Deliberately excludes internal fields such as idempotency keys and admin notes. */
+export interface PaymentOrderView {
+  id: string;
+  order_number: string;
+  user_id: string | null;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  promo_code: string | null;
+  status: OrderStatus;
+  payment_method: string;
+  notes: string | null;
+  expires_at: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+  order_items: OrderItem[];
+  latest_submission: Pick<
+    PaymentSubmission,
+    "id" | "original_name" | "note" | "review_note" | "status" | "reviewed_at" | "submitted_at"
+  > | null;
+  events: Array<{
+    id: string;
+    action: string;
+    label: string;
+    created_at: string;
+  }>;
 }
 
 export interface Faq {
