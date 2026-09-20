@@ -10,8 +10,12 @@ export const BRAND = {
 } as const;
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Menunggu",
-  paid: "Dibayar",
+  pending: "Menunggu (Legacy)",
+  pending_payment: "Menunggu Pembayaran",
+  under_review: "Sedang Diverifikasi",
+  paid: "Pembayaran Disetujui",
+  rejected: "Bukti Ditolak",
+  expired: "Kedaluwarsa",
   processing: "Diproses",
   completed: "Selesai",
   cancelled: "Dibatalkan",
@@ -20,7 +24,11 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 export const ORDER_STATUS_STYLE: Record<OrderStatus, string> = {
   pending: "bg-amber-400/10 text-amber-300 ring-amber-400/30",
+  pending_payment: "bg-amber-400/10 text-amber-300 ring-amber-400/30",
+  under_review: "bg-violet-400/10 text-violet-300 ring-violet-400/30",
   paid: "bg-sky-400/10 text-sky-300 ring-sky-400/30",
+  rejected: "bg-rose-400/10 text-rose-300 ring-rose-400/30",
+  expired: "bg-slate-400/10 text-slate-300 ring-slate-400/30",
   processing: "bg-violet-400/10 text-violet-300 ring-violet-400/30",
   completed: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/30",
   cancelled: "bg-rose-400/10 text-rose-300 ring-rose-400/30",
@@ -28,12 +36,16 @@ export const ORDER_STATUS_STYLE: Record<OrderStatus, string> = {
 };
 
 export const ORDER_STATUSES: OrderStatus[] = [
-  "pending",
+  "pending_payment",
+  "under_review",
   "paid",
+  "rejected",
+  "expired",
   "processing",
   "completed",
   "cancelled",
   "refunded",
+  "pending",
 ];
 
 export const PROMO_MESSAGES: Record<PromoStatus, string> = {
@@ -73,7 +85,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     {
       icon: "Zap",
       title: "Proses Cepat",
-      description: "Pesanan diproses cepat setelah konfirmasi via WhatsApp.",
+      description: "Pesanan diproses cepat setelah pembayaran QRIS terverifikasi.",
     },
     {
       icon: "Sparkles",
@@ -88,7 +100,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     {
       icon: "MousePointerClick",
       title: "Pemesanan Mudah",
-      description: "Pilih produk, checkout, lanjut WhatsApp. Sesederhana itu.",
+      description: "Pilih produk, buat order, lalu bayar aman melalui QRIS.",
     },
     {
       icon: "ShieldCheck",
@@ -128,8 +140,8 @@ export const HOW_TO_ORDER_STEPS = [
     description: "Isi nama, email, dan nomor WhatsApp. Server akan membuat order resmi.",
   },
   {
-    title: "Lanjut via WhatsApp",
-    description: "Kirim detail order ke admin, selesaikan pembayaran, pesanan diproses.",
+    title: "Bayar via QRIS",
+    description: "Bayar sesuai total order, upload bukti, lalu pantau verifikasi secara realtime.",
   },
 ] as const;
 
