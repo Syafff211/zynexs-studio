@@ -397,38 +397,29 @@ export async function updateOrderStatusAction(
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("orders")
-    .update({
-      status: parsed.data.status,
-      admin_notes: parsed.data.adminNotes || null,
-    })
-    .eq("id", parsed.data.orderId);
+  const { data: result, error } = await admin.rpc("admin_update_order_status", {
+    p_order_id: parsed.data.orderId,
+    p_admin_id: auth.id,
+    p_status: parsed.data.status,
+    p_admin_note: parsed.data.adminNotes || null,
+  });
 
   if (error) return { ok: false, message: "Gagal memperbarui status order." };
+  if (result === "invalid_transition") {
+    return {
+      ok: false,
+      message: "Transisi status tidak diizinkan. Verifikasi PAID/REJECTED harus melalui bukti pembayaran.",
+    };
+  }
+  if (result !== "updated") return { ok: false, message: "Order tidak ditemukan." };
 
-  // Keep the payment record in sync with the order lifecycle.
-  const paymentStatus =
-    parsed.data.status === "paid" || parsed.data.status === "completed"
-      ? "paid"
-      : parsed.data.status === "refunded"
-        ? "refunded"
-        : parsed.data.status === "cancelled"
-          ? "failed"
-          : "unpaid";
-
-  await admin
-    .from("payments")
-    .update({
-      status: paymentStatus,
-      paid_at: paymentStatus === "paid" ? new Date().toISOString() : null,
-    })
-    .eq("order_id", parsed.data.orderId);
-
+  revalidatePath("/admin");
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  revalidatePath(`/payment/${parsed.data.orderId}`);
   revalidatePath("/account/orders");
-  return { ok: true, message: "Status order diperbarui." };
+  revalidatePath(`/account/orders/${parsed.data.orderId}`);
+  return { ok: true, message: "Status order diperbarui dan dicatat di audit log." };
 }
 
 /* ------------------------------------------------------------------ */
