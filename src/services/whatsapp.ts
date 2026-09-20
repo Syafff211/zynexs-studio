@@ -3,8 +3,12 @@ import type { OrderStatus } from "@/types";
 
 /** Capitalised English status labels, as used in the WhatsApp handoff message. */
 const STATUS_WA_LABEL: Record<OrderStatus, string> = {
-  pending: "Pending",
+  pending: "Pending (Legacy)",
+  pending_payment: "Menunggu Pembayaran",
+  under_review: "Sedang Diverifikasi",
   paid: "Paid",
+  rejected: "Bukti Ditolak",
+  expired: "Kedaluwarsa",
   processing: "Processing",
   completed: "Completed",
   cancelled: "Cancelled",
