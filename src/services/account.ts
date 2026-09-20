@@ -26,7 +26,9 @@ export async function getUserOrders(userId: string, limit = 100): Promise<OrderW
 export function computeAccountStats(orders: Order[]): AccountStats {
   return {
     total: orders.length,
-    pending: orders.filter((o) => o.status === "pending").length,
+    pending: orders.filter((o) =>
+      ["pending", "pending_payment", "under_review", "rejected"].includes(o.status)
+    ).length,
     processing: orders.filter((o) => o.status === "processing" || o.status === "paid").length,
     completed: orders.filter((o) => o.status === "completed").length,
     spent: orders
