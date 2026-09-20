@@ -165,8 +165,35 @@ export type PromoInput = z.infer<typeof promoSchema>;
 
 export const orderStatusSchema = z.object({
   orderId: z.string().uuid(),
-  status: z.enum(["pending", "paid", "processing", "completed", "cancelled", "refunded"]),
+  status: z.enum([
+    "pending",
+    "pending_payment",
+    "under_review",
+    "paid",
+    "rejected",
+    "expired",
+    "processing",
+    "completed",
+    "cancelled",
+    "refunded",
+  ]),
   adminNotes: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+export const paymentStatusRequestSchema = z.object({
+  orderId: z.string().uuid("Order tidak valid"),
+  accessToken: z.string().trim().max(128).optional().or(z.literal("")),
+});
+
+export const paymentSubmissionSchema = paymentStatusRequestSchema.extend({
+  note: z.string().trim().max(500, "Catatan maksimal 500 karakter").optional().or(z.literal("")),
+  idempotencyKey: z.string().trim().min(8).max(64),
+});
+
+export const paymentReviewSchema = z.object({
+  submissionId: z.string().uuid("Bukti pembayaran tidak valid"),
+  decision: z.enum(["approve", "reject"]),
+  reviewNote: z.string().trim().max(1000, "Catatan maksimal 1000 karakter").optional().or(z.literal("")),
 });
 
 export const userRoleSchema = z.object({
