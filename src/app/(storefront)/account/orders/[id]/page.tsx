@@ -10,6 +10,7 @@ import {
   Mail,
   Phone,
   Copy,
+  CreditCard,
 } from "lucide-react";
 import { getProfile } from "@/lib/supabase/server";
 import { getUserOrderDetail } from "@/services/account";
@@ -87,15 +88,36 @@ export default async function OrderDetailPage({
         </div>
 
         <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonStyles("primary", "md", "w-full sm:w-auto")}
-          >
-            <MessageCircle className="h-4 w-4" aria-hidden="true" />
-            Lanjut via WhatsApp
-          </a>
+          {order.payment_method === "qris_dana_static" ? (
+            <Link
+              href={`/payment/${order.id}`}
+              className={buttonStyles("primary", "md", "w-full sm:w-auto")}
+            >
+              <CreditCard className="h-4 w-4" aria-hidden="true" />
+              Lihat Pembayaran
+            </Link>
+          ) : (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonStyles("primary", "md", "w-full sm:w-auto")}
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Lanjut via WhatsApp
+            </a>
+          )}
+          {order.payment_method === "qris_dana_static" && (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonStyles("secondary", "md", "w-full sm:w-auto")}
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              Butuh Bantuan?
+            </a>
+          )}
           <Link href="/store" className={buttonStyles("secondary", "md", "w-full sm:w-auto")}>
             Belanja Lagi
           </Link>
