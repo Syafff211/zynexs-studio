@@ -4,7 +4,11 @@ import type { OrderStatus } from "@/types";
 
 const TONE: Record<OrderStatus, "brand" | "success" | "warning" | "danger" | "neutral" | "violet"> = {
   pending: "warning",
+  pending_payment: "warning",
+  under_review: "violet",
   paid: "brand",
+  rejected: "danger",
+  expired: "neutral",
   processing: "violet",
   completed: "success",
   cancelled: "danger",
