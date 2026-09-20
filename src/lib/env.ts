@@ -38,3 +38,17 @@ export function serviceRoleKey(): string {
 export function hasServiceRole(): boolean {
   return typeof window === "undefined" && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
+
+/** HMAC secret for guest payment links. Falls back to the server-only service key. */
+export function paymentLinkSecret(): string {
+  if (typeof window !== "undefined") {
+    throw new Error("PAYMENT_LINK_SECRET must never be read on the client.");
+  }
+  return process.env.PAYMENT_LINK_SECRET || serviceRoleKey();
+}
+
+/** Static QRIS orders expire after 60 minutes unless configured otherwise. */
+export function paymentExpiryMinutes(): number {
+  const parsed = Number.parseInt(process.env.PAYMENT_EXPIRY_MINUTES || "60", 10);
+  return Number.isFinite(parsed) ? Math.min(1440, Math.max(10, parsed)) : 60;
+}
