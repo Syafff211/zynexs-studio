@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone Google Apps Script bot (bukan bagian dari bundle Next.js):
+    "whatsapp-bot/**",
   ]),
 ]);
 
