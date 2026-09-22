@@ -1,60 +1,101 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 import { quoteCart, PricingError } from "@/services/pricing";
 import { PROMO_MESSAGES } from "@/lib/constants";
-import { paymentExpiryMinutes } from "@/lib/env";
-import { buildPaymentPath } from "@/lib/payment-access";
+import { buildOrderMessage, buildWhatsAppUrl, type WhatsAppOrderPayload } from "@/services/whatsapp";
 import { normalizePhone } from "@/lib/utils";
 import type { CheckoutInput } from "@/lib/validations";
-import type { OrderWithItems, PromoStatus } from "@/types";
+import type { OrderStatus, OrderWithItems, PromoStatus } from "@/types";
 
 export interface CreateOrderResult {
   ok: boolean;
   message: string;
   orderId?: string;
   orderNumber?: string;
-  paymentUrl?: string;
+  whatsappUrl?: string;
   total?: number;
   promoStatus?: PromoStatus;
 }
 
+/** Admin WhatsApp number: admin-editable site settings first, env fallback. */
+async function resolveAdminWhatsAppNumber(admin: ReturnType<typeof createAdminClient>): Promise<string> {
+  const { data } = await admin
+    .from("site_settings")
+    .select("whatsapp_number")
+    .limit(1)
+    .maybeSingle();
+  const fromSettings = (data as { whatsapp_number?: string } | null)?.whatsapp_number;
+  return fromSettings && fromSettings.trim() ? fromSettings.trim() : env.whatsappNumber;
+}
+
+function buildOrderWhatsAppUrl(order: OrderWithItems, adminNumber: string): string {
+  const payload: WhatsAppOrderPayload = {
+    orderNumber: order.order_number,
+    customerName: order.customer_name,
+    customerEmail: order.customer_email,
+    customerPhone: order.customer_phone,
+    items: (order.order_items ?? []).map((item) => ({
+      name: item.product_name,
+      quantity: item.quantity,
+      subtotal: item.subtotal,
+    })),
+    subtotal: order.subtotal,
+    discount: order.discount,
+    total: order.total,
+    promoCode: order.promo_code,
+    notes: order.notes,
+    status: order.status as OrderStatus,
+  };
+  return buildWhatsAppUrl(adminNumber, buildOrderMessage(payload));
+}
+
 /**
  * Creates an order end-to-end, server-side:
- *  1. re-prices the cart from the database
- *  2. validates + atomically redeems the promo (race-condition safe)
- *  3. persists order + order_items (price snapshots) + QRIS payment row
- *  4. returns a signed payment-page path for guest checkouts
+ *  1. requires a signed-in customer (checkout is account-only)
+ *  2. re-prices the cart from the database
+ *  3. validates + atomically redeems the promo (race-condition safe)
+ *  4. persists order + order_items (price snapshots) + unpaid payment row
+ *  5. returns a wa.me deep link with the full order message for the admin
  *
  * Idempotent: replaying the same idempotencyKey returns the original order
- * instead of creating a duplicate, so double-clicking checkout is harmless.
+ * (with its WhatsApp link) instead of creating a duplicate.
  */
 export async function createOrder(
   input: CheckoutInput,
   userId: string | null
 ): Promise<CreateOrderResult> {
+  if (!userId) {
+    return {
+      ok: false,
+      message: "Silakan masuk atau daftar terlebih dahulu sebelum membuat pesanan.",
+    };
+  }
+
   const admin = createAdminClient();
 
   // ---- 0. Idempotency: has this exact submission already been processed? --
   const { data: existing } = await admin
     .from("orders")
-    .select("id, order_number, total, user_id, customer_email")
+    .select("*, order_items(*)")
     .eq("idempotency_key", input.idempotencyKey)
     .maybeSingle();
 
   if (existing) {
+    const order = existing as unknown as OrderWithItems;
     const sameCustomer =
-      String(existing.customer_email).toLowerCase() === input.customerEmail.toLowerCase() &&
-      (!existing.user_id || existing.user_id === userId);
+      order.customer_email.toLowerCase() === input.customerEmail.toLowerCase() &&
+      (!order.user_id || order.user_id === userId);
     if (!sameCustomer) return { ok: false, message: "Kunci checkout sudah digunakan." };
 
-    const orderId = existing.id as string;
+    const adminNumber = await resolveAdminWhatsAppNumber(admin);
     return {
       ok: true,
       message: "Order sudah dibuat sebelumnya.",
-      orderId,
-      orderNumber: existing.order_number as string,
-      paymentUrl: buildPaymentPath(orderId, !existing.user_id),
-      total: existing.total as number,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      whatsappUrl: buildOrderWhatsAppUrl(order, adminNumber),
+      total: order.total,
     };
   }
 
@@ -98,9 +139,8 @@ export async function createOrder(
       total: usePromo ? quote.total : quote.subtotal,
       promo_id: usePromo ? quote.promo!.promoId : null,
       promo_code: usePromo ? quote.promo!.code : null,
-      status: "pending_payment",
-      payment_method: "qris_dana_static",
-      expires_at: new Date(Date.now() + paymentExpiryMinutes() * 60_000).toISOString(),
+      status: "pending",
+      payment_method: "whatsapp",
       notes: input.notes?.trim() || null,
       idempotency_key: input.idempotencyKey,
     })
@@ -112,23 +152,24 @@ export async function createOrder(
     if (orderError?.code === "23505") {
       const { data: raced } = await admin
         .from("orders")
-        .select("id, order_number, total, user_id, customer_email")
+        .select("*, order_items(*)")
         .eq("idempotency_key", input.idempotencyKey)
         .maybeSingle();
       if (raced) {
+        const order = raced as unknown as OrderWithItems;
         const sameCustomer =
-          String(raced.customer_email).toLowerCase() === input.customerEmail.toLowerCase() &&
-          (!raced.user_id || raced.user_id === userId);
+          order.customer_email.toLowerCase() === input.customerEmail.toLowerCase() &&
+          (!order.user_id || order.user_id === userId);
         if (!sameCustomer) return { ok: false, message: "Kunci checkout sudah digunakan." };
 
-        const racedOrderId = raced.id as string;
+        const adminNumber = await resolveAdminWhatsAppNumber(admin);
         return {
           ok: true,
           message: "Order sudah dibuat sebelumnya.",
-          orderId: racedOrderId,
-          orderNumber: raced.order_number as string,
-          paymentUrl: buildPaymentPath(racedOrderId, !raced.user_id),
-          total: raced.total as number,
+          orderId: order.id,
+          orderNumber: order.order_number,
+          whatsappUrl: buildOrderWhatsAppUrl(order, adminNumber),
+          total: order.total,
         };
       }
     }
@@ -156,17 +197,17 @@ export async function createOrder(
     return { ok: false, message: "Gagal menyimpan item pesanan. Coba lagi." };
   }
 
-  // ---- 6. Unpaid QRIS payment record --------------------------------------
+  // ---- 6. Unpaid payment record ------------------------------------------
   const { error: paymentError } = await admin.from("payments").insert({
     order_id: orderId,
-    method: "qris_dana_static",
+    method: "whatsapp",
     amount: orderRow.total as number,
     status: "unpaid",
   });
 
   if (paymentError) {
     await admin.from("orders").delete().eq("id", orderId);
-    return { ok: false, message: "Gagal menyiapkan pembayaran QRIS. Coba lagi." };
+    return { ok: false, message: "Gagal menyiapkan pembayaran. Coba lagi." };
   }
 
   // ---- 7. Atomic promo redemption (row-locked in Postgres) ----------------
@@ -201,39 +242,30 @@ export async function createOrder(
     entity_type: "order",
     entity_id: orderId,
     metadata: {
-      to: "pending_payment",
-      method: "qris_dana_static",
+      to: "pending",
+      method: "whatsapp",
       amount: orderRow.total as number,
     },
   });
   if (auditError) console.error("[order:audit]", auditError);
+
+  const adminNumber = await resolveAdminWhatsAppNumber(admin);
+  const { data: freshOrder } = await admin
+    .from("orders")
+    .select("*, order_items(*)")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  const orderForUrl = (freshOrder ?? null) as unknown as OrderWithItems | null;
 
   return {
     ok: true,
     message: "Order berhasil dibuat!",
     orderId,
     orderNumber,
-    paymentUrl: buildPaymentPath(orderId, !userId),
+    whatsappUrl: orderForUrl
+      ? buildOrderWhatsAppUrl(orderForUrl, adminNumber)
+      : buildWhatsAppUrl(adminNumber, `Halo Zynex Studio 👋 Saya sudah membuat order ${orderNumber}. Mohon diproses.`),
     total: orderRow.total as number,
   };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Reads                                                              */
-/* ------------------------------------------------------------------ */
-
-export async function getOrderForUser(
-  orderId: string,
-  userId: string
-): Promise<OrderWithItems | null> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("orders")
-    .select("*, order_items(*)")
-    .eq("id", orderId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return data as unknown as OrderWithItems;
 }
