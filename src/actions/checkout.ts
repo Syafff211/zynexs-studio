@@ -7,7 +7,6 @@ import { quoteCart, PricingError } from "@/services/pricing";
 import { createOrder } from "@/services/orders";
 import { checkoutSchema, quoteSchema, firstError } from "@/lib/validations";
 import { PROMO_MESSAGES } from "@/lib/constants";
-import { isStaticQrisConfigured } from "@/lib/qris";
 import type { PromoStatus } from "@/types";
 
 export interface QuoteResult {
@@ -124,15 +123,16 @@ export interface CheckoutResult {
   description?: string;
   orderId?: string;
   orderNumber?: string;
-  paymentUrl?: string;
+  whatsappUrl?: string;
   total?: number;
   promoStatus?: PromoStatus;
 }
 
 /**
- * Creates a real pending-payment order. Prices, discounts and totals are
- * recalculated server-side; a payment-page path is returned only after the
- * order, snapshots and unpaid QRIS payment record exist.
+ * Creates a real pending order (checkout is account-only) and returns the
+ * wa.me handoff URL. Prices, discounts and totals are recalculated
+ * server-side; the WhatsApp link is returned only after the order,
+ * snapshots and unpaid payment record exist.
  */
 export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
   if (!isSupabaseConfigured()) {
@@ -144,17 +144,16 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     return { ok: false, message: firstError(parsed.error) };
   }
 
-  if (!isStaticQrisConfigured()) {
+  const user = await getSessionUser();
+  if (!user) {
     return {
       ok: false,
-      message: "Pembayaran QRIS belum dikonfigurasi. Admin harus memasang public/qris.jpg resmi.",
+      message: "Silakan masuk atau daftar terlebih dahulu sebelum membuat pesanan.",
     };
   }
 
-  const user = await getSessionUser();
-
   try {
-    const result = await createOrder(parsed.data, user?.id ?? null);
+    const result = await createOrder(parsed.data, user.id);
 
     if (!result.ok) {
       return {
@@ -170,10 +169,10 @@ export async function checkoutAction(input: unknown): Promise<CheckoutResult> {
     return {
       ok: true,
       message: "Order berhasil dibuat!",
-      description: "Lanjutkan ke halaman pembayaran QRIS.",
+      description: "Lanjutkan ke WhatsApp untuk konfirmasi pesanan.",
       orderId: result.orderId,
       orderNumber: result.orderNumber,
-      paymentUrl: result.paymentUrl,
+      whatsappUrl: result.whatsappUrl,
       total: result.total,
     };
   } catch (error) {
