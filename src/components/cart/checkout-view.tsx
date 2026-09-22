@@ -2,22 +2,22 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
-  QrCode,
+  MessageCircle,
   ShieldCheck,
   ShoppingBag,
   ArrowRight,
   Check,
   Tag,
   X,
-  TriangleAlert,
+  LogIn,
 } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/button";
 import { GlassCard, EmptyState, Skeleton, Badge } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useCart } from "@/hooks/use-cart";
+import { AuthModal } from "@/components/auth/auth-modal";
 import { quoteCartAction, checkoutAction, type QuoteResult } from "@/actions/checkout";
 import { cn, formatIDR } from "@/lib/utils";
 import type { Profile } from "@/types";
@@ -29,14 +29,17 @@ function newIdempotencyKey(): string {
 
 export function CheckoutView({
   profile,
-  qrisConfigured,
 }: {
   profile: Profile | null;
-  qrisConfigured: boolean;
 }) {
   const { items, hydrated, promoCode, clear, setPromoCode } = useCart();
-  const { error: toastError } = useToast();
-  const router = useRouter();
+  const { error: toastError, success: toastSuccess } = useToast();
+
+  // `authed` starts from the server-rendered profile and flips to true the
+  // moment the popup login/register succeeds — no page navigation needed.
+  const [authed, setAuthed] = React.useState(Boolean(profile));
+  const [authOpen, setAuthOpen] = React.useState(false);
+  const pendingCheckoutRef = React.useRef(false);
 
   const [form, setForm] = React.useState({
     customerName: profile?.full_name ?? "",
@@ -90,8 +93,7 @@ export function CheckoutView({
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const performCheckout = async () => {
     if (submitting) return; // hard guard against double submit
     if (!validate()) {
       toastError("Periksa kembali data kamu", "Beberapa field belum valid.");
@@ -114,7 +116,7 @@ export function CheckoutView({
         idempotencyKey: idempotencyKeyRef.current,
       });
 
-      if (!response.ok || !response.paymentUrl || !response.orderNumber) {
+      if (!response.ok || !response.whatsappUrl || !response.orderNumber) {
         toastError("Gagal membuat pesanan", response.message);
         if (response.promoStatus && response.promoStatus !== "valid") setPromoCode(null);
         idempotencyKeyRef.current = newIdempotencyKey();
@@ -122,13 +124,62 @@ export function CheckoutView({
       }
 
       clear();
-      router.push(response.paymentUrl);
+      toastSuccess("Order berhasil dibuat!", "Membuka WhatsApp untuk konfirmasi ke admin…");
+      // Same-tab navigation is the most reliable way to reach wa.me
+      // (popup blockers may reject window.open after an await).
+      window.setTimeout(() => window.location.assign(response.whatsappUrl!), 700);
     } catch {
       toastError("Terjadi kesalahan", "Coba lagi dalam beberapa saat.");
       idempotencyKeyRef.current = newIdempotencyKey();
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /** Called by AuthModal after a successful popup login / register. */
+  const handleAuthenticated = React.useCallback(() => {
+    setAuthed(true);
+    setAuthOpen(false);
+    if (form.customerEmail && form.customerName && form.customerPhone) {
+      // Re-quote with the now-authenticated account so per-user promo
+      // rules (one redemption per account) apply to the fresh session.
+      startQuote(async () => {
+        const response = await quoteCartAction({
+          items: payload,
+          promoCode: promoCode ?? undefined,
+          email: form.customerEmail || undefined,
+        });
+        setQuote(response);
+      });
+    }
+    if (pendingCheckoutRef.current) {
+      pendingCheckoutRef.current = false;
+      // Let state settle, then continue the checkout that was interrupted.
+      window.setTimeout(() => void performCheckout(), 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.customerEmail, form.customerName, form.customerPhone, payload, promoCode]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting) return;
+    if (!validate()) {
+      toastError("Periksa kembali data kamu", "Beberapa field belum valid.");
+      return;
+    }
+    if (!payload.length) {
+      toastError("Keranjang kosong", "Tambahkan produk terlebih dahulu.");
+      return;
+    }
+
+    // Checkout is account-only: open the popup instead of leaving the page.
+    if (!authed) {
+      pendingCheckoutRef.current = true;
+      setAuthOpen(true);
+      return;
+    }
+
+    await performCheckout();
   };
 
   /* ---------------- Loading / empty ---------------- */
@@ -163,227 +214,227 @@ export function CheckoutView({
   const total = priced?.total ?? subtotal;
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-start">
-      {/* Customer details */}
-      <div className="space-y-6">
-        {!qrisConfigured && (
-          <GlassCard solid className="border-amber-400/25 bg-amber-500/[0.06] p-5 sm:p-6">
-            <div className="flex items-start gap-3">
-              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
-              <div>
-                <h2 className="font-semibold text-amber-100">Pembayaran QRIS belum tersedia</h2>
-                <p className="mt-1 text-[13.5px] leading-relaxed text-amber-100/65">
-                  Admin belum memasang foto QRIS resmi. Order baru dinonaktifkan agar pelanggan
-                  tidak diarahkan ke pembayaran yang belum siap.
-                </p>
-              </div>
+    <>
+      {authOpen && (
+      <AuthModal
+        open={authOpen}
+        onClose={() => {
+          setAuthOpen(false);
+          pendingCheckoutRef.current = false;
+        }}
+        onAuthenticated={handleAuthenticated}
+        initialMode="login"
+      />
+      )}
+      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-start">
+        {/* Customer details */}
+        <div className="space-y-6">
+          <GlassCard solid className="p-5 sm:p-6">
+            <h2 className="text-lg font-semibold text-white">Data Pemesan</h2>
+            <p className="mt-1 text-[13.5px] text-white/50">
+              Pastikan nomor WhatsApp aktif agar admin bisa menghubungi kamu.
+            </p>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Nama Lengkap"
+                htmlFor="customerName"
+                required
+                error={errors.customerName}
+                className="sm:col-span-2"
+              >
+                <Input
+                  id="customerName"
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={update("customerName")}
+                  placeholder="Muhammad"
+                  autoComplete="name"
+                  invalid={Boolean(errors.customerName)}
+                  required
+                />
+              </Field>
+
+              <Field label="Email" htmlFor="customerEmail" required error={errors.customerEmail}>
+                <Input
+                  id="customerEmail"
+                  name="customerEmail"
+                  type="email"
+                  value={form.customerEmail}
+                  onChange={update("customerEmail")}
+                  placeholder="kamu@email.com"
+                  autoComplete="email"
+                  invalid={Boolean(errors.customerEmail)}
+                  required
+                />
+              </Field>
+
+              <Field
+                label="Nomor WhatsApp"
+                htmlFor="customerPhone"
+                required
+                error={errors.customerPhone}
+                hint="Contoh: 081234567890"
+              >
+                <Input
+                  id="customerPhone"
+                  name="customerPhone"
+                  type="tel"
+                  inputMode="tel"
+                  value={form.customerPhone}
+                  onChange={update("customerPhone")}
+                  placeholder="08xxxxxxxxxx"
+                  autoComplete="tel"
+                  invalid={Boolean(errors.customerPhone)}
+                  required
+                />
+              </Field>
+
+              <Field
+                label="Catatan (opsional)"
+                htmlFor="notes"
+                className="sm:col-span-2"
+                hint="Contoh: nama domain yang diinginkan, username sosial media, dsb."
+              >
+                <Textarea
+                  id="notes"
+                  name="notes"
+                  value={form.notes}
+                  onChange={update("notes")}
+                  placeholder="Tulis detail tambahan untuk pesanan kamu…"
+                  maxLength={500}
+                />
+              </Field>
             </div>
           </GlassCard>
-        )}
 
-        <GlassCard solid className="p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-white">Data Pemesan</h2>
-          <p className="mt-1 text-[13.5px] text-white/50">
-            Pastikan nomor WhatsApp aktif agar admin bisa menghubungi kamu.
-          </p>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Nama Lengkap"
-              htmlFor="customerName"
-              required
-              error={errors.customerName}
-              className="sm:col-span-2"
-            >
-              <Input
-                id="customerName"
-                name="customerName"
-                value={form.customerName}
-                onChange={update("customerName")}
-                placeholder="Muhammad"
-                autoComplete="name"
-                invalid={Boolean(errors.customerName)}
-                required
-              />
-            </Field>
-
-            <Field label="Email" htmlFor="customerEmail" required error={errors.customerEmail}>
-              <Input
-                id="customerEmail"
-                name="customerEmail"
-                type="email"
-                value={form.customerEmail}
-                onChange={update("customerEmail")}
-                placeholder="kamu@email.com"
-                autoComplete="email"
-                invalid={Boolean(errors.customerEmail)}
-                required
-              />
-            </Field>
-
-            <Field
-              label="Nomor WhatsApp"
-              htmlFor="customerPhone"
-              required
-              error={errors.customerPhone}
-              hint="Contoh: 081234567890"
-            >
-              <Input
-                id="customerPhone"
-                name="customerPhone"
-                type="tel"
-                inputMode="tel"
-                value={form.customerPhone}
-                onChange={update("customerPhone")}
-                placeholder="08xxxxxxxxxx"
-                autoComplete="tel"
-                invalid={Boolean(errors.customerPhone)}
-                required
-              />
-            </Field>
-
-            <Field
-              label="Catatan (opsional)"
-              htmlFor="notes"
-              className="sm:col-span-2"
-              hint="Contoh: nama domain yang diinginkan, username sosial media, dsb."
-            >
-              <Textarea
-                id="notes"
-                name="notes"
-                value={form.notes}
-                onChange={update("notes")}
-                placeholder="Tulis detail tambahan untuk pesanan kamu…"
-                maxLength={500}
-              />
-            </Field>
-          </div>
-        </GlassCard>
-
-        {/* Order preview */}
-        <GlassCard solid className="p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-white">Produk Dipesan</h2>
-          <ul className="mt-4 divide-y divide-white/[0.07]">
-            {items.map((item) => (
-              <li key={item.productId} className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[14.5px] font-medium text-white">{item.name}</p>
-                  <p className="text-[12.5px] text-white/45">
-                    {formatIDR(item.price)} × {item.quantity}
-                    {item.duration ? ` · ${item.duration}` : ""}
+          {/* Order preview */}
+          <GlassCard solid className="p-5 sm:p-6">
+            <h2 className="text-lg font-semibold text-white">Produk Dipesan</h2>
+            <ul className="mt-4 divide-y divide-white/[0.07]">
+              {items.map((item) => (
+                <li key={item.productId} className="flex items-center justify-between gap-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[14.5px] font-medium text-white">{item.name}</p>
+                    <p className="text-[12.5px] text-white/45">
+                      {formatIDR(item.price)} × {item.quantity}
+                      {item.duration ? ` · ${item.duration}` : ""}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-[14.5px] font-semibold text-white">
+                    {formatIDR(item.price * item.quantity)}
                   </p>
-                </div>
-                <p className="shrink-0 text-[14.5px] font-semibold text-white">
-                  {formatIDR(item.price * item.quantity)}
-                </p>
-              </li>
-            ))}
-          </ul>
-          <Link
-            href="/cart"
-            className="mt-4 inline-flex text-[13.5px] font-medium text-brand-200 hover:text-brand-100"
-          >
-            ← Ubah keranjang
-          </Link>
-        </GlassCard>
-      </div>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/cart"
+              className="mt-4 inline-flex text-[13.5px] font-medium text-brand-200 hover:text-brand-100"
+            >
+              ← Ubah keranjang
+            </Link>
+          </GlassCard>
+        </div>
 
-      {/* Summary + submit */}
-      <aside className="lg:sticky lg:top-24">
-        <GlassCard solid className="p-5 sm:p-6">
-          <h2 className="text-lg font-semibold text-white">Ringkasan</h2>
+        {/* Summary + submit */}
+        <aside className="lg:sticky lg:top-24">
+          <GlassCard solid className="p-5 sm:p-6">
+            <h2 className="text-lg font-semibold text-white">Ringkasan</h2>
 
-          {promoCode && discount > 0 && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 ring-1 ring-inset ring-emerald-400/25">
-              <span className="flex min-w-0 items-center gap-2 text-[13px] text-emerald-200">
-                <Tag className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate font-mono font-bold tracking-wider">{promoCode}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setPromoCode(null)}
-                aria-label="Hapus promo"
-                className="shrink-0 rounded-md p-0.5 text-emerald-300/70 hover:text-emerald-100"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          <dl className="mt-4 space-y-2.5 text-[14.5px]">
-            <div className="flex justify-between">
-              <dt className="text-white/50">Subtotal</dt>
-              <dd className="font-medium text-white/85">
-                {quoting ? <Skeleton className="h-5 w-20" /> : formatIDR(subtotal)}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-white/50">Discount</dt>
-              <dd className={cn("font-medium", discount > 0 ? "text-emerald-300" : "text-white/40")}>
-                {discount > 0 ? `-${formatIDR(discount)}` : formatIDR(0)}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between border-t border-white/[0.09] pt-3.5">
-              <dt className="text-[15px] font-semibold text-white">Total</dt>
-              <dd className="text-2xl font-bold text-white">
-                {quoting ? <Skeleton className="h-7 w-28" /> : formatIDR(total)}
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
-            <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-100">
-              <Check className="h-4 w-4" aria-hidden="true" />
-              Harga divalidasi server
-            </p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-emerald-100/70">
-              Setelah order tersimpan, kamu akan diarahkan ke halaman QRIS. Masukkan nominal
-              tepat sesuai total order, lalu unggah bukti pembayaran.
-            </p>
-          </div>
-
-          <Button
-            type="submit"
-            size="lg"
-            className="mt-5 w-full"
-            loading={submitting}
-            disabled={submitting || quoting || !items.length || !qrisConfigured}
-          >
-            {submitting ? (
-              "Membuat Pesanan..."
-            ) : (
-              <>
-                <QrCode className="h-4 w-4" aria-hidden="true" />
-                Buat Order &amp; Bayar QRIS →
-              </>
+            {promoCode && discount > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 ring-1 ring-inset ring-emerald-400/25">
+                <span className="flex min-w-0 items-center gap-2 text-[13px] text-emerald-200">
+                  <Tag className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate font-mono font-bold tracking-wider">{promoCode}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPromoCode(null)}
+                  aria-label="Hapus promo"
+                  className="shrink-0 rounded-md p-0.5 text-emerald-300/70 hover:text-emerald-100"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             )}
-          </Button>
 
-          <p className="mt-3.5 flex items-start gap-2 text-[12px] leading-relaxed text-white/35">
-            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Klik tombol tidak menandai order sebagai lunas. Status PAID hanya diberikan setelah
-            bukti diverifikasi admin.
-          </p>
+            <dl className="mt-4 space-y-2.5 text-[14.5px]">
+              <div className="flex justify-between">
+                <dt className="text-white/50">Subtotal</dt>
+                <dd className="font-medium text-white/85">
+                  {quoting ? <Skeleton className="h-5 w-20" /> : formatIDR(subtotal)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-white/50">Diskon</dt>
+                <dd className={cn("font-medium", discount > 0 ? "text-emerald-300" : "text-white/40")}>
+                  {discount > 0 ? `-${formatIDR(discount)}` : formatIDR(0)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/[0.09] pt-3.5">
+                <dt className="text-[15px] font-semibold text-white">Total</dt>
+                <dd className="text-2xl font-bold text-white">
+                  {quoting ? <Skeleton className="h-7 w-28" /> : formatIDR(total)}
+                </dd>
+              </div>
+            </dl>
 
-          {!profile && (
-            <p className="mt-3 text-center text-[12.5px] text-white/40">
-              <Link href="/login?next=/checkout" className="font-medium text-brand-200 underline underline-offset-2">
-                Login
-              </Link>{" "}
-              agar pesanan tersimpan di akun kamu.
-            </p>
-          )}
-
-          {profile && (
-            <div className="mt-3 flex justify-center">
-              <Badge tone="success">
-                <Check className="h-3 w-3" aria-hidden="true" />
-                Tersimpan ke akun {profile.full_name?.split(" ")[0] ?? "kamu"}
-              </Badge>
+            <div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
+              <p className="flex items-center gap-2 text-[14px] font-semibold text-emerald-100">
+                <Check className="h-4 w-4" aria-hidden="true" />
+                Harga divalidasi server
+              </p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-emerald-100/70">
+                Setelah order tersimpan, kamu akan diarahkan ke WhatsApp admin untuk konfirmasi
+                dan instruksi pembayaran.
+              </p>
             </div>
-          )}
-        </GlassCard>
-      </aside>
-    </form>
+
+            <Button
+              type="submit"
+              size="lg"
+              className="mt-5 w-full"
+              loading={submitting}
+              disabled={submitting || quoting || !items.length}
+            >
+              {submitting ? (
+                "Membuat Pesanan..."
+              ) : authed ? (
+                <>
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  Buat Order via WhatsApp →
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-4 w-4" aria-hidden="true" />
+                  Masuk &amp; Buat Order via WhatsApp →
+                </>
+              )}
+            </Button>
+
+            <p className="mt-3.5 flex items-start gap-2 text-[12px] leading-relaxed text-white/35">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Order baru berstatus Menunggu Konfirmasi. Pesanan dianggap lunas hanya setelah
+              pembayaran diverifikasi admin.
+            </p>
+
+            {authed ? (
+              <div className="mt-3 flex justify-center">
+                <Badge tone="success">
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                  Tersimpan ke akun {profile?.full_name?.split(" ")[0] ?? "kamu"}
+                </Badge>
+              </div>
+            ) : (
+              <p className="mt-3 text-center text-[12.5px] text-white/40">
+                Kamu akan diminta <span className="font-medium text-brand-200">masuk atau daftar</span> lewat
+                popup — tanpa keluar dari halaman ini. Sudah punya akun? tinggal lanjutkan; lupa password juga
+                bisa direset dari popup.
+              </p>
+            )}
+          </GlassCard>
+        </aside>
+      </form>
+    </>
   );
 }
