@@ -234,16 +234,16 @@ const PRODUCTS: SeedProduct[] = [
 ];
 
 const FAQS = [
-  { question: "Bagaimana cara memesan di Zynex Studio?", answer: "Pilih produk, tambahkan ke keranjang, lalu klik checkout. Setelah order dibuat, kamu akan diarahkan ke halaman QRIS untuk membayar dan mengunggah bukti pembayaran.", category: "Pemesanan", sort_order: 1 },
-  { question: "Metode pembayaran apa saja yang tersedia?", answer: "Checkout utama menggunakan QRIS statis DANA Bisnis. Masukkan nominal sesuai total order, unggah bukti, lalu admin akan memverifikasi transaksi secara manual.", category: "Pembayaran", sort_order: 2 },
+  { question: "Bagaimana cara memesan di Zynex Studio?", answer: "Pilih produk, tambahkan ke keranjang, lalu klik checkout. Masuk atau daftar lewat popup (tanpa pindah halaman), order langsung tersimpan, dan kamu diarahkan ke WhatsApp admin untuk konfirmasi pesanan.", category: "Pemesanan", sort_order: 1 },
+  { question: "Metode pembayaran apa saja yang tersedia?", answer: "Setelah order dibuat, kamu akan diarahkan ke WhatsApp admin. Admin akan mengonfirmasi pesanan dan memberi tahu metode pembayaran (QRIS/transfer) langsung di chat.", category: "Pembayaran", sort_order: 2 },
   { question: "Berapa lama pesanan saya diproses?", answer: "Sebagian besar pesanan diproses dalam 5–60 menit setelah pembayaran dikonfirmasi. Produk tertentu bisa memerlukan waktu lebih lama.", category: "Pemesanan", sort_order: 3 },
   { question: "Bagaimana cara memakai kode promo?", answer: "Masukkan kode promo di halaman detail produk, keranjang, atau checkout, lalu klik Redeem. Diskon dihitung dan divalidasi langsung oleh server kami.", category: "Promo", sort_order: 4 },
   { question: "Apakah satu akun bisa memakai kode promo berkali-kali?", answer: "Tidak. Setiap akun hanya dapat menggunakan satu kode promo yang sama sebanyak satu kali. Kuota promo juga terbatas untuk seluruh pengguna.", category: "Promo", sort_order: 5 },
   { question: "Apakah produk digital bisa direfund?", answer: "Refund dipertimbangkan bila pesanan belum diproses atau produk tidak dapat kami kirimkan. Hubungi admin secepatnya bila ada kendala.", category: "Kebijakan", sort_order: 6 },
   { question: "Apakah data saya aman?", answer: "Ya. Data pesanan tersimpan aman di database kami dan hanya digunakan untuk memproses pesananmu.", category: "Kebijakan", sort_order: 7 },
-  { question: "Apakah harus punya akun untuk memesan?", answer: "Tidak wajib, kamu bisa checkout sebagai guest. Namun dengan akun, seluruh riwayat pesanan dan promo tersimpan rapi.", category: "Umum", sort_order: 8 },
-  { question: "Bagaimana kalau batas waktu pembayaran QRIS habis?", answer: "Setiap order punya batas waktu pembayaran (default 60 menit) yang terlihat di halaman pembayaran. Jika waktu habis sebelum bukti kamu disetujui, order otomatis kedaluwarsa dan tidak bisa dibayar lagi — silakan buat order baru dengan menekan tombol Bantuan di halaman pembayaran.", category: "Pembayaran", sort_order: 9 },
-  { question: "Kenapa bukti pembayaran saya ditolak?", answer: "Penolakan biasanya terjadi karena nominal tidak sesuai, bukti tidak jelas atau tidak lengkap, atau bukti bukan milik order tersebut. Alasan penolakan selalu ditampilkan di halaman pembayaran — kamu bisa mengunggah ulang bukti yang benar selama batas waktu belum habis (maksimal 5 kali unggah).", category: "Pembayaran", sort_order: 10 },
+  { question: "Apakah harus punya akun untuk memesan?", answer: "Ya. Checkout memerlukan akun agar pesanan kamu tercatat rapi dan bisa dipantau. Saat klik checkout, kamu bisa langsung masuk atau daftar lewat popup tanpa berpindah halaman.", category: "Umum", sort_order: 8 },
+  { question: "Bagaimana status pesanan saya diperbarui?", answer: "Setelah kamu mengirim pesanan ke WhatsApp admin, admin akan mengonfirmasi dan mengatur pembayaran di chat. Perubahan status juga otomatis terlihat di halaman Pesanan Saya tanpa perlu refresh.", category: "Pemesanan", sort_order: 9 },
+  { question: "Bagaimana kalau lupa password?", answer: "Klik Lupa password di popup masuk saat checkout (atau di halaman login), masukkan email terdaftar, lalu cek inbox untuk link pengaturan password baru.", category: "Akun", sort_order: 10 },
 ];
 
 async function main() {
