@@ -10,7 +10,7 @@ export const BRAND = {
 } as const;
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Menunggu (Legacy)",
+  pending: "Menunggu Konfirmasi",
   pending_payment: "Menunggu Pembayaran",
   under_review: "Sedang Diverifikasi",
   paid: "Pembayaran Disetujui",
