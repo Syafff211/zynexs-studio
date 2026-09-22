@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient, getSessionUser } from "@/lib/supabase/server";
-import { isSupabaseConfigured, hasServiceRole } from "@/lib/env";
+import { isSupabaseConfigured, hasServiceRole, env } from "@/lib/env";
 import { loginSchema, registerSchema, profileSchema, firstError } from "@/lib/validations";
 
 export interface ActionState {
@@ -170,4 +170,35 @@ export async function changePasswordAction(
 
   if (error) return { ok: false, message: mapAuthError(error.message) };
   return { ok: true, message: "Password berhasil diubah." };
+}
+
+/**
+ * Sends the Supabase password-recovery email. The link inside the email
+ * redirects to /reset-password where the user picks a new password.
+ * Always reports success — never reveals whether an email is registered.
+ */
+export async function requestPasswordResetAction(
+  _prev: ActionState | null,
+  formData: FormData
+): Promise<ActionState> {
+  if (!isSupabaseConfigured()) return NOT_CONFIGURED;
+
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email)) {
+    return { ok: false, message: "Format email tidak valid." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${env.siteUrl}/reset-password`,
+  });
+
+  if (error) return { ok: false, message: mapAuthError(error.message) };
+
+  return {
+    ok: true,
+    message: `Email instruksi reset password sudah dikirim ke ${email}. Cek inbox atau folder spam kamu.`,
+  };
 }
